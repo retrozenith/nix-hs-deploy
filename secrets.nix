@@ -24,13 +24,18 @@ let
   # Get this from the server: cat /etc/ssh/ssh_host_ed25519_key.pub
   # Or remotely: ssh-keyscan <server-ip> | grep ed25519
   #
-  # TODO: Replace with actual server host key before first deployment
-  andromeda = "ssh-ed25519 AAAA... root@andromeda";
+  # IMPORTANT: Add the host key here once the server is up, then run:
+  #   agenix -r  (to re-encrypt all secrets with the new key)
+  #
+  # andromeda = "ssh-ed25519 AAAA... root@andromeda";
 
   # Key groups
   users = [ admin ];
-  hosts = [ andromeda ];
-  allKeys = users ++ hosts;
+  # hosts = [ andromeda ];  # Uncomment when host key is available
+
+  # For now, encrypt with admin key only. Host will need the admin private key
+  # or you'll need to re-encrypt with the host key once the server is up.
+  allKeys = users;  # Change to: users ++ hosts; when host key is added
 
 in
 {

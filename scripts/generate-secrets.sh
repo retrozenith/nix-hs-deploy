@@ -3,6 +3,9 @@
 # generate-secrets.sh
 # Generates encrypted agenix secrets from a .env file
 #
+# If 'age' is not found, ensure nix profile is in PATH:
+#   export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
+#
 # Usage:
 #   ./scripts/generate-secrets.sh [path-to-env-file]
 #
@@ -49,6 +52,10 @@ log_error() {
 check_agenix() {
     if ! command -v agenix &> /dev/null; then
         log_error "agenix not found. Please run 'nix develop' first."
+        echo ""
+        echo "Or ensure nix profile is in PATH:"
+        echo "  export PATH=\"\$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:\$PATH\""
+        echo ""
         exit 1
     fi
 }
@@ -75,22 +82,37 @@ check_secrets_nix() {
         exit 1
     fi
 
-    # Check if there are placeholder keys
-    if grep -q 'ssh-ed25519 AAAA\.\.\.' "$SECRETS_NIX"; then
+    # Check if there are placeholder keys (incomplete keys like "AAAA...") that are NOT commented out
+    if grep -v '^\s*#' "$SECRETS_NIX" | grep -q 'ssh-ed25519 AAAA\.\.\.'; then
         log_error "secrets.nix contains placeholder SSH keys!"
         echo ""
-        echo "Before generating secrets, you must add the server's SSH host key."
+        echo "Before generating secrets, you must either:"
         echo ""
-        echo "1. Get the server's host key:"
+        echo "Option 1: Add the server's SSH host key (recommended for deployment)"
         echo "   ssh-keyscan <server-ip> | grep ed25519"
         echo "   # Or on the server: cat /etc/ssh/ssh_host_ed25519_key.pub"
         echo ""
-        echo "2. Update secrets.nix:"
-        echo "   andromeda = \"ssh-ed25519 AAAA... root@andromeda\";"
-        echo ""
-        echo "3. Run this script again"
+        echo "Option 2: Comment out the placeholder and use admin key only"
+        echo "   # andromeda = \"ssh-ed25519 AAAA... root@andromeda\";"
+        echo "   (You'll need to re-encrypt with host key later: agenix -r)"
         echo ""
         exit 1
+    fi
+
+    # Check if at least one valid key exists
+    if ! grep -qE 'ssh-ed25519 [A-Za-z0-9+/]{68}' "$SECRETS_NIX"; then
+        log_error "No valid SSH keys found in secrets.nix"
+        echo ""
+        echo "Add at least one SSH public key to secrets.nix"
+        echo ""
+        exit 1
+    fi
+
+    # Warn if no host key is configured
+    if ! grep -qE '^\s*andromeda\s*=' "$SECRETS_NIX" || grep -qE '^\s*#\s*andromeda\s*=' "$SECRETS_NIX"; then
+        log_warn "No host key configured - secrets encrypted with admin key only"
+        log_warn "After server is up, add host key and run: agenix -r"
+        echo ""
     fi
 }
 
@@ -192,18 +214,30 @@ generate_secrets_with_age() {
     source "$ENV_FILE"
     set +a
 
-    # Extract public keys from secrets.nix
-    # This is a simplified approach - just read the keys manually
+    # Extract public keys from secrets.nix and convert to age format
     log_info "Reading public keys from secrets.nix..."
 
     # Create a temporary recipients file
     RECIPIENTS_FILE=$(mktemp)
 
-    # Extract SSH public keys from secrets.nix (simplified grep approach)
-    grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+' "$SECRETS_NIX" | sort -u > "$RECIPIENTS_FILE"
+    # Check if ssh-to-age is available
+    if ! command -v ssh-to-age &> /dev/null; then
+        log_error "ssh-to-age not found. Install with: nix profile install nixpkgs#ssh-to-age"
+        exit 1
+    fi
+
+    # Extract SSH public keys from secrets.nix (excluding commented lines)
+    # and convert them to age format
+    while read -r ssh_key; do
+        age_key=$(echo "$ssh_key" | ssh-to-age 2>/dev/null) || {
+            log_warn "Failed to convert key: $ssh_key"
+            continue
+        }
+        echo "$age_key" >> "$RECIPIENTS_FILE"
+    done < <(grep -v '^\s*#' "$SECRETS_NIX" | grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+' | sort -u)
 
     if [[ ! -s "$RECIPIENTS_FILE" ]]; then
-        log_error "No valid SSH keys found in secrets.nix"
+        log_error "No valid SSH keys found in secrets.nix (or conversion failed)"
         rm -f "$RECIPIENTS_FILE"
         exit 1
     fi
@@ -236,33 +270,42 @@ generate_secrets_with_age() {
     local created=0
     local skipped=0
 
+    # Helper to track success/failure without triggering set -e
+    try_create() {
+        if create_age_secret "$1" "$2"; then
+            ((created++)) || true
+        else
+            ((skipped++)) || true
+        fi
+    }
+
     # Tailscale
-    create_age_secret "tailscale-auth-key" "${TAILSCALE_AUTH_KEY:-}" && ((created++)) || ((skipped++))
+    try_create "tailscale-auth-key" "${TAILSCALE_AUTH_KEY:-}"
 
     # Cloudflare
-    create_age_secret "cloudflare-api-token" "${CLOUDFLARE_API_TOKEN:-}" && ((created++)) || ((skipped++))
-    create_age_secret "cloudflare-zone-id" "${CLOUDFLARE_ZONE_ID:-}" && ((created++)) || ((skipped++))
+    try_create "cloudflare-api-token" "${CLOUDFLARE_API_TOKEN:-}"
+    try_create "cloudflare-zone-id" "${CLOUDFLARE_ZONE_ID:-}"
 
     # Domains
-    create_age_secret "domain-jellyfin" "${DOMAIN_JELLYFIN:-}" && ((created++)) || ((skipped++))
-    create_age_secret "domain-prowlarr" "${DOMAIN_PROWLARR:-}" && ((created++)) || ((skipped++))
-    create_age_secret "domain-vault" "${DOMAIN_VAULT:-}" && ((created++)) || ((skipped++))
-    create_age_secret "domain-request" "${DOMAIN_REQUEST:-}" && ((created++)) || ((skipped++))
-    create_age_secret "domain-auth" "${DOMAIN_AUTH:-}" && ((created++)) || ((skipped++))
-    create_age_secret "domain-streamystats" "${DOMAIN_STREAMYSTATS:-}" && ((created++)) || ((skipped++))
+    try_create "domain-jellyfin" "${DOMAIN_JELLYFIN:-}"
+    try_create "domain-prowlarr" "${DOMAIN_PROWLARR:-}"
+    try_create "domain-vault" "${DOMAIN_VAULT:-}"
+    try_create "domain-request" "${DOMAIN_REQUEST:-}"
+    try_create "domain-auth" "${DOMAIN_AUTH:-}"
+    try_create "domain-streamystats" "${DOMAIN_STREAMYSTATS:-}"
 
     # Vaultwarden
-    create_age_secret "vaultwarden-admin-token" "${VAULTWARDEN_ADMIN_TOKEN:-}" && ((created++)) || ((skipped++))
+    try_create "vaultwarden-admin-token" "${VAULTWARDEN_ADMIN_TOKEN:-}"
 
     # VPN
-    create_age_secret "gluetun-wireguard-key" "${GLUETUN_WIREGUARD_KEY:-}" && ((created++)) || ((skipped++))
+    try_create "gluetun-wireguard-key" "${GLUETUN_WIREGUARD_KEY:-}"
 
     # Streamystats
-    create_age_secret "streamystats-session-secret" "${STREAMYSTATS_SESSION_SECRET:-}" && ((created++)) || ((skipped++))
-    create_age_secret "streamystats-postgres-password" "${STREAMYSTATS_POSTGRES_PASSWORD:-}" && ((created++)) || ((skipped++))
+    try_create "streamystats-session-secret" "${STREAMYSTATS_SESSION_SECRET:-}"
+    try_create "streamystats-postgres-password" "${STREAMYSTATS_POSTGRES_PASSWORD:-}"
 
     # Media PostgreSQL (Sonarr, Radarr, Prowlarr)
-    create_age_secret "media-postgres-password" "${MEDIA_POSTGRES_PASSWORD:-}" && ((created++)) || ((skipped++))
+    try_create "media-postgres-password" "${MEDIA_POSTGRES_PASSWORD:-}"
 
     # Cleanup
     rm -f "$RECIPIENTS_FILE"
@@ -297,8 +340,15 @@ main() {
     if command -v age &> /dev/null; then
         generate_secrets_with_age
     else
-        check_agenix
-        generate_secrets
+        log_error "age not found in PATH"
+        echo ""
+        echo "Ensure nix profile is in your PATH:"
+        echo "  export PATH=\"\$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:\$PATH\""
+        echo ""
+        echo "Or install age with:"
+        echo "  nix profile install nixpkgs#age"
+        echo ""
+        exit 1
     fi
 }
 
