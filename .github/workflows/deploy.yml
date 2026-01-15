@@ -1,0 +1,208 @@
+name: Deploy
+
+on:
+    workflow_dispatch:
+        inputs:
+            host:
+                description: "Host to deploy"
+                required: true
+                default: "andromeda"
+                type: choice
+                options:
+                    - andromeda
+            action:
+                description: "Deployment action"
+                required: true
+                default: "switch"
+                type: choice
+                options:
+                    - switch
+                    - boot
+                    - test
+                    - dry-run
+            use_tailscale:
+                description: "Connect via Tailscale VPN"
+                required: false
+                default: true
+                type: boolean
+
+jobs:
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@main
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@main
+
+            - name: Run nixpkgs-lint
+              run: |
+                  LINT_OUTPUT=$(nix run github:nix-community/nixpkgs-lint -- . 2>&1) || true
+                  if [ -n "$LINT_OUTPUT" ]; then
+                    echo "::error::Linting issues detected:"
+                    echo "$LINT_OUTPUT"
+                    exit 1
+                  fi
+                  echo "✅ No linting issues found"
+
+            - name: Check flake
+              run: nix flake check
+
+    deploy:
+        runs-on: ubuntu-latest
+        needs: lint
+        environment: production
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@main
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@main
+
+            - name: Build configuration
+              run: |
+                  nix build .#nixosConfigurations.${{ inputs.host }}.config.system.build.toplevel
+
+            - name: Setup Tailscale
+              if: inputs.use_tailscale
+              uses: tailscale/github-action@v3
+              with:
+                  oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+                  oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+                  tags: tag:ci
+
+            - name: Wait for Tailscale connection
+              if: inputs.use_tailscale
+              run: |
+                  echo "Waiting for Tailscale to connect..."
+                  sleep 5
+                  tailscale status
+                  echo "Tailscale connected successfully"
+
+            - name: Setup SSH
+              uses: webfactory/ssh-agent@v0.9.0
+              with:
+                  ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+            - name: Determine target host
+              id: target
+              run: |
+                  if [ "${{ inputs.use_tailscale }}" = "true" ]; then
+                    # Use Tailscale hostname (MagicDNS)
+                    echo "host=${{ secrets.DEPLOY_HOST_TAILSCALE }}" >> $GITHUB_OUTPUT
+                  else
+                    # Use direct IP/hostname
+                    echo "host=${{ secrets.DEPLOY_HOST }}" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Add host to known_hosts
+              run: |
+                  mkdir -p ~/.ssh
+                  ssh-keyscan -H ${{ steps.target.outputs.host }} >> ~/.ssh/known_hosts 2>/dev/null || true
+                  # Add fallback for Tailscale hosts that might take a moment
+                  if [ "${{ inputs.use_tailscale }}" = "true" ]; then
+                    sleep 2
+                    ssh-keyscan -H ${{ steps.target.outputs.host }} >> ~/.ssh/known_hosts 2>/dev/null || true
+                  fi
+
+            - name: Test SSH connection
+              run: |
+                  ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new \
+                    ${{ secrets.DEPLOY_USER }}@${{ steps.target.outputs.host }} \
+                    "echo 'SSH connection successful'"
+
+            - name: Deploy to ${{ inputs.host }}
+              if: inputs.action != 'dry-run'
+              run: |
+                  nix copy --to ssh://${{ secrets.DEPLOY_USER }}@${{ steps.target.outputs.host }} ./result
+                  ssh ${{ secrets.DEPLOY_USER }}@${{ steps.target.outputs.host }} \
+                    "sudo nix-env -p /nix/var/nix/profiles/system --set $(readlink -f ./result) && sudo ./result/bin/switch-to-configuration ${{ inputs.action }}"
+
+            - name: Dry run summary
+              if: inputs.action == 'dry-run'
+              run: |
+                  echo "## Dry Run Summary" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "Would deploy to: **${{ inputs.host }}**" >> $GITHUB_STEP_SUMMARY
+                  echo "Connection method: ${{ inputs.use_tailscale && 'Tailscale VPN' || 'Direct' }}" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "Build output:" >> $GITHUB_STEP_SUMMARY
+                  echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                  nix path-info -sh ./result >> $GITHUB_STEP_SUMMARY
+                  echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+            - name: Deployment summary
+              if: inputs.action != 'dry-run'
+              run: |
+                  echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Host:** ${{ inputs.host }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Action:** ${{ inputs.action }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Connection:** ${{ inputs.use_tailscale && 'Tailscale VPN' || 'Direct' }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+    verify:
+        runs-on: ubuntu-latest
+        needs: deploy
+        if: inputs.action == 'switch' || inputs.action == 'boot'
+
+        steps:
+            - name: Setup Tailscale
+              if: inputs.use_tailscale
+              uses: tailscale/github-action@v3
+              with:
+                  oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+                  oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+                  tags: tag:ci
+
+            - name: Wait for Tailscale connection
+              if: inputs.use_tailscale
+              run: |
+                  sleep 5
+                  tailscale status
+
+            - name: Setup SSH
+              uses: webfactory/ssh-agent@v0.9.0
+              with:
+                  ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+            - name: Determine target host
+              id: target
+              run: |
+                  if [ "${{ inputs.use_tailscale }}" = "true" ]; then
+                    echo "host=${{ secrets.DEPLOY_HOST_TAILSCALE }}" >> $GITHUB_OUTPUT
+                  else
+                    echo "host=${{ secrets.DEPLOY_HOST }}" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Add host to known_hosts
+              run: |
+                  mkdir -p ~/.ssh
+                  ssh-keyscan -H ${{ steps.target.outputs.host }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+            - name: Verify deployment
+              run: |
+                  echo "## Verification Results" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+
+                  # Check system version
+                  echo "### System Version" >> $GITHUB_STEP_SUMMARY
+                  ssh ${{ secrets.DEPLOY_USER }}@${{ steps.target.outputs.host }} \
+                    "nixos-version" >> $GITHUB_STEP_SUMMARY
+
+                  echo "" >> $GITHUB_STEP_SUMMARY
+
+                  # Check key services
+                  echo "### Service Status" >> $GITHUB_STEP_SUMMARY
+                  echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                  ssh ${{ secrets.DEPLOY_USER }}@${{ steps.target.outputs.host }} \
+                    "systemctl is-active jellyfin sonarr radarr prowlarr qbittorrent || true" >> $GITHUB_STEP_SUMMARY
+                  echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

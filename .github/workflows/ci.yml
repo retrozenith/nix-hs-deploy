@@ -1,0 +1,131 @@
+name: CI
+
+on:
+    push:
+        branches:
+            - main
+            - master
+    pull_request:
+        branches:
+            - main
+            - master
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@main
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@main
+
+            - name: Check flake
+              run: nix flake check
+
+    build:
+        runs-on: ubuntu-latest
+        needs: check
+        strategy:
+            matrix:
+                host:
+                    - andromeda
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@main
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@main
+
+            - name: Build ${{ matrix.host }} configuration
+              run: nix build .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel --dry-run
+
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@main
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@main
+
+            - name: Run nixpkgs-lint
+              run: |
+                  echo "## Lint Results" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+
+                  # Run nixpkgs-lint on all Nix files
+                  LINT_OUTPUT=$(nix run github:nix-community/nixpkgs-lint -- . 2>&1) || true
+
+                  if [ -z "$LINT_OUTPUT" ]; then
+                    echo "✅ No linting issues found!" >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "⚠️ Linting issues detected:" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                    echo "$LINT_OUTPUT" >> $GITHUB_STEP_SUMMARY
+                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+                    # Print to console as well
+                    echo "$LINT_OUTPUT"
+
+                    # Fail the job if there are issues
+                    if [ -n "$LINT_OUTPUT" ]; then
+                      exit 1
+                    fi
+                  fi
+
+    format:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@main
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@main
+
+            - name: Check formatting
+              run: |
+                  nix develop -c nixpkgs-fmt --check .
+
+    security:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Check for secrets
+              uses: trufflesecurity/trufflehog@main
+              with:
+                  extra_args: --only-verified
+
+    copilot-review:
+        runs-on: ubuntu-latest
+        if: github.event_name == 'pull_request'
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: GitHub Copilot Code Review
+              uses: github/copilot-code-review-action@v1
+              with:
+                  model: gpt-4o

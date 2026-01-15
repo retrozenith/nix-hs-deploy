@@ -1,0 +1,99 @@
+name: Update Flake
+
+on:
+    schedule:
+        # Run weekly on Sunday at 3:00 AM UTC
+        - cron: "0 3 * * 0"
+    workflow_dispatch:
+        inputs:
+            deploy:
+                description: "Deploy after update"
+                required: false
+                default: false
+                type: boolean
+
+jobs:
+    update:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@main
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@main
+
+            - name: Update flake inputs
+              run: nix flake update
+
+            - name: Check if flake.lock changed
+              id: check_changes
+              run: |
+                  if git diff --quiet flake.lock; then
+                    echo "changed=false" >> $GITHUB_OUTPUT
+                  else
+                    echo "changed=true" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Build configuration
+              if: steps.check_changes.outputs.changed == 'true'
+              run: nix build .#nixosConfigurations.andromeda.config.system.build.toplevel --dry-run
+
+            - name: Create Pull Request
+              if: steps.check_changes.outputs.changed == 'true'
+              uses: peter-evans/create-pull-request@v6
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  commit-message: "chore(flake): update flake inputs"
+                  title: "chore(flake): update flake inputs"
+                  body: |
+                      ## Automated Flake Update
+
+                      This PR updates the flake inputs to their latest versions.
+
+                      ### Changes
+                      ```
+                      nix flake update
+                      ```
+
+                      ### Checklist
+                      - [ ] Review the changes in `flake.lock`
+                      - [ ] Verify the build passes
+                      - [ ] Test on a staging environment if available
+
+                      ---
+                      *This PR was automatically created by GitHub Actions.*
+                  branch: chore/flake-update
+                  delete-branch: true
+                  labels: |
+                      dependencies
+                      automated
+
+    check:
+        runs-on: ubuntu-latest
+        needs: update
+        if: always()
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.head_ref || github.ref }}
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@main
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@main
+
+            - name: Check flake
+              run: nix flake check
+
+            - name: Build andromeda configuration
+              run: nix build .#nixosConfigurations.andromeda.config.system.build.toplevel --dry-run

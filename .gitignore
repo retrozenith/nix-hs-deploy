@@ -1,0 +1,37 @@
+# Nix build artifacts
+result
+result-*
+
+# direnv
+.direnv/
+.envrc
+
+# Editor artifacts
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+*.bak
+
+# macOS
+.DS_Store
+
+# Environment secrets file (NEVER commit!)
+.env.secrets
+.env.local
+.env*.local
+
+# Private keys (NEVER commit!)
+*.key
+id_*
+!id_*.pub
+
+# Decrypted/plaintext secrets
+secrets/*.txt
+secrets/*.json
+secrets/*.env
+secrets/*.secret
+
+# Encrypted secrets ARE safe to commit
+!secrets/*.age
