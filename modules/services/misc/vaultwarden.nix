@@ -158,116 +158,117 @@
         SMTP_SECURITY = config.services.vaultwardenConfig.smtp.security;
       };
 
-      environmentFile = config.services.vaultwardenConfig.environmentFile;
+      # Use generated env file if secrets are configured, otherwise use user-provided environmentFile
+      environmentFile =
+        if (config.services.vaultwardenConfig.domainFile != null ||
+            config.services.vaultwardenConfig.adminTokenFile != null ||
+            (config.services.vaultwardenConfig.smtp.enable && config.services.vaultwardenConfig.smtp.usernameFile != null))
+        then "/run/vaultwarden/env"
+        else config.services.vaultwardenConfig.environmentFile;
     };
 
-    # Generate environment file from secrets if needed
-    systemd.services.vaultwarden-env-generator = lib.mkIf (
-      config.services.vaultwardenConfig.domainFile != null ||
-      config.services.vaultwardenConfig.adminTokenFile != null ||
-      (config.services.vaultwardenConfig.smtp.enable && config.services.vaultwardenConfig.smtp.usernameFile != null)
-    ) {
-      description = "Generate Vaultwarden environment from secrets";
-      before = [ "vaultwarden.service" ];
-      requiredBy = [ "vaultwarden.service" ];
-      wantedBy = [ "multi-user.target" ];
+    systemd = {
+      # Generate environment file from secrets if needed
+      services.vaultwarden-env-generator = lib.mkIf (
+        config.services.vaultwardenConfig.domainFile != null ||
+        config.services.vaultwardenConfig.adminTokenFile != null ||
+        (config.services.vaultwardenConfig.smtp.enable && config.services.vaultwardenConfig.smtp.usernameFile != null)
+      ) {
+        description = "Generate Vaultwarden environment from secrets";
+        before = [ "vaultwarden.service" ];
+        requiredBy = [ "vaultwarden.service" ];
+        wantedBy = [ "multi-user.target" ];
 
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        User = "root";
-        Group = "root";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          User = "root";
+          Group = "root";
+        };
+
+        script = let
+          cfg = config.services.vaultwardenConfig;
+        in ''
+          set -euo pipefail
+
+          ENV_FILE="/run/vaultwarden/env"
+          mkdir -p /run/vaultwarden
+          chmod 750 /run/vaultwarden
+
+          # Start with empty file
+          echo "# Auto-generated Vaultwarden environment" > "$ENV_FILE"
+
+          ${lib.optionalString (cfg.domainFile != null) ''
+            DOMAIN=$(cat ${cfg.domainFile})
+            echo "DOMAIN=https://$DOMAIN" >> "$ENV_FILE"
+          ''}
+
+          ${lib.optionalString (cfg.adminTokenFile != null) ''
+            ADMIN_TOKEN=$(cat ${cfg.adminTokenFile})
+            echo "ADMIN_TOKEN=$ADMIN_TOKEN" >> "$ENV_FILE"
+          ''}
+
+          ${lib.optionalString (cfg.smtp.enable && cfg.smtp.usernameFile != null) ''
+            SMTP_USERNAME=$(cat ${cfg.smtp.usernameFile})
+            echo "SMTP_USERNAME=$SMTP_USERNAME" >> "$ENV_FILE"
+          ''}
+
+          ${lib.optionalString (cfg.smtp.enable && cfg.smtp.passwordFile != null) ''
+            SMTP_PASSWORD=$(cat ${cfg.smtp.passwordFile})
+            echo "SMTP_PASSWORD=$SMTP_PASSWORD" >> "$ENV_FILE"
+          ''}
+
+          chmod 400 "$ENV_FILE"
+          chown vaultwarden:vaultwarden "$ENV_FILE"
+        '';
       };
 
-      script = let
-        cfg = config.services.vaultwardenConfig;
-      in ''
-        set -euo pipefail
+      # Create data directory
+      tmpfiles.rules = [
+        "d ${config.services.vaultwardenConfig.dataDir} 0750 vaultwarden vaultwarden -"
+      ];
 
-        ENV_FILE="/run/vaultwarden/env"
-        mkdir -p /run/vaultwarden
-        chmod 750 /run/vaultwarden
+      # Firewall - only open if not behind reverse proxy
+      # Typically you'd use Caddy in front, so these stay closed
+      # networking.firewall.allowedTCPPorts = [
+      #   config.services.vaultwardenConfig.port
+      #   config.services.vaultwardenConfig.websocketPort
+      # ];
 
-        # Start with empty file
-        echo "# Auto-generated Vaultwarden environment" > "$ENV_FILE"
+      # Backup service for Vaultwarden data
+      services.vaultwarden-backup = {
+        description = "Backup Vaultwarden database";
+        after = [ "vaultwarden.service" ];
 
-        ${lib.optionalString (cfg.domainFile != null) ''
-          DOMAIN=$(cat ${cfg.domainFile})
-          echo "DOMAIN=https://$DOMAIN" >> "$ENV_FILE"
-        ''}
+        serviceConfig = {
+          Type = "oneshot";
+          User = "vaultwarden";
+          Group = "vaultwarden";
+        };
 
-        ${lib.optionalString (cfg.adminTokenFile != null) ''
-          ADMIN_TOKEN=$(cat ${cfg.adminTokenFile})
-          echo "ADMIN_TOKEN=$ADMIN_TOKEN" >> "$ENV_FILE"
-        ''}
+        script = ''
+          set -euo pipefail
+          BACKUP_DIR="${config.services.vaultwardenConfig.dataDir}/backups"
+          mkdir -p "$BACKUP_DIR"
 
-        ${lib.optionalString (cfg.smtp.enable && cfg.smtp.usernameFile != null) ''
-          SMTP_USERNAME=$(cat ${cfg.smtp.usernameFile})
-          echo "SMTP_USERNAME=$SMTP_USERNAME" >> "$ENV_FILE"
-        ''}
+          # Backup SQLite database
+          ${pkgs.sqlite}/bin/sqlite3 "${config.services.vaultwardenConfig.dataDir}/db.sqlite3" ".backup '$BACKUP_DIR/db-$(date +%Y%m%d-%H%M%S).sqlite3'"
 
-        ${lib.optionalString (cfg.smtp.enable && cfg.smtp.passwordFile != null) ''
-          SMTP_PASSWORD=$(cat ${cfg.smtp.passwordFile})
-          echo "SMTP_PASSWORD=$SMTP_PASSWORD" >> "$ENV_FILE"
-        ''}
-
-        chmod 400 "$ENV_FILE"
-        chown vaultwarden:vaultwarden "$ENV_FILE"
-      '';
-    };
-
-    # Override environment file if we're generating one
-    services.vaultwarden.environmentFile = lib.mkIf (
-      config.services.vaultwardenConfig.domainFile != null ||
-      config.services.vaultwardenConfig.adminTokenFile != null ||
-      (config.services.vaultwardenConfig.smtp.enable && config.services.vaultwardenConfig.smtp.usernameFile != null)
-    ) (lib.mkForce "/run/vaultwarden/env");
-
-    # Create data directory
-    systemd.tmpfiles.rules = [
-      "d ${config.services.vaultwardenConfig.dataDir} 0750 vaultwarden vaultwarden -"
-    ];
-
-    # Firewall - only open if not behind reverse proxy
-    # Typically you'd use Caddy in front, so these stay closed
-    # networking.firewall.allowedTCPPorts = [
-    #   config.services.vaultwardenConfig.port
-    #   config.services.vaultwardenConfig.websocketPort
-    # ];
-
-    # Backup service for Vaultwarden data
-    systemd.services.vaultwarden-backup = {
-      description = "Backup Vaultwarden database";
-      after = [ "vaultwarden.service" ];
-
-      serviceConfig = {
-        Type = "oneshot";
-        User = "vaultwarden";
-        Group = "vaultwarden";
+          # Keep only last 7 backups
+          ls -t "$BACKUP_DIR"/db-*.sqlite3 2>/dev/null | tail -n +8 | xargs -r rm
+        '';
       };
 
-      script = ''
-        set -euo pipefail
-        BACKUP_DIR="${config.services.vaultwardenConfig.dataDir}/backups"
-        mkdir -p "$BACKUP_DIR"
+      # Daily backup timer
+      timers.vaultwarden-backup = {
+        description = "Daily Vaultwarden backup";
+        wantedBy = [ "timers.target" ];
 
-        # Backup SQLite database
-        ${pkgs.sqlite}/bin/sqlite3 "${config.services.vaultwardenConfig.dataDir}/db.sqlite3" ".backup '$BACKUP_DIR/db-$(date +%Y%m%d-%H%M%S).sqlite3'"
-
-        # Keep only last 7 backups
-        ls -t "$BACKUP_DIR"/db-*.sqlite3 2>/dev/null | tail -n +8 | xargs -r rm
-      '';
-    };
-
-    # Daily backup timer
-    systemd.timers.vaultwarden-backup = {
-      description = "Daily Vaultwarden backup";
-      wantedBy = [ "timers.target" ];
-
-      timerConfig = {
-        OnCalendar = "daily";
-        RandomizedDelaySec = "1h";
-        Persistent = true;
+        timerConfig = {
+          OnCalendar = "daily";
+          RandomizedDelaySec = "1h";
+          Persistent = true;
+        };
       };
     };
   };

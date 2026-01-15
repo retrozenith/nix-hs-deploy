@@ -77,16 +77,13 @@ in
     # Use the built-in NixOS Radarr service
     services.radarr = {
       enable = true;
-      user = cfg.user;
-      group = cfg.group;
-      dataDir = cfg.dataDir;
-      openFirewall = cfg.openFirewall;
+      inherit (cfg) user group dataDir openFirewall;
     };
 
     # Create user if using default
     users.users.${cfg.user} = lib.mkIf (cfg.user == "radarr") {
       isSystemUser = true;
-      group = cfg.group;
+      inherit (cfg) group;
       home = cfg.dataDir;
     };
 
@@ -94,36 +91,40 @@ in
     users.groups.${cfg.group} = { };
 
     # Create directories with proper permissions
-    systemd.tmpfiles.rules = [
-      "d ${cfg.dataDir} 0750 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.mediaDir} 0775 ${cfg.user} ${cfg.group} -"
-    ];
-
     # PostgreSQL environment variables for Radarr
-    systemd.services.radarr.environment = lib.mkIf usePostgres {
-      RADARR__POSTGRES__HOST = pgCfg.host;
-      RADARR__POSTGRES__PORT = toString pgCfg.port;
-      RADARR__POSTGRES__USER = pgCfg.radarr.user;
-      RADARR__POSTGRES__MAINDB = pgCfg.radarr.mainDb;
-      RADARR__POSTGRES__LOGDB = pgCfg.radarr.logDb;
-    };
-
     # Load password from file via EnvironmentFile
-    systemd.services.radarr.serviceConfig = lib.mkIf usePostgres {
-      ExecStartPre = lib.mkBefore [
-        "+${pkgs.writeShellScript "radarr-postgres-env" ''
-          mkdir -p /run/radarr
-          echo "RADARR__POSTGRES__PASSWORD=$(cat ${pgCfg.passwordFile})" > /run/radarr/postgres.env
-          chown ${cfg.user}:${cfg.group} /run/radarr/postgres.env
-          chmod 400 /run/radarr/postgres.env
-        ''}"
-      ];
-      EnvironmentFile = lib.mkIf (pgCfg.passwordFile != null) "/run/radarr/postgres.env";
-    };
-
     # Ensure PostgreSQL is ready before Radarr starts
-    systemd.services.radarr.after = lib.mkIf usePostgres [ "postgresql.service" "media-postgres-setup.service" ];
-    systemd.services.radarr.requires = lib.mkIf usePostgres [ "postgresql.service" ];
+    systemd = {
+      tmpfiles.rules = [
+        "d ${cfg.dataDir} 0750 ${cfg.user} ${cfg.group} -"
+        "d ${cfg.mediaDir} 0775 ${cfg.user} ${cfg.group} -"
+      ];
+
+      services.radarr = {
+        environment = lib.mkIf usePostgres {
+          RADARR__POSTGRES__HOST = pgCfg.host;
+          RADARR__POSTGRES__PORT = toString pgCfg.port;
+          RADARR__POSTGRES__USER = pgCfg.radarr.user;
+          RADARR__POSTGRES__MAINDB = pgCfg.radarr.mainDb;
+          RADARR__POSTGRES__LOGDB = pgCfg.radarr.logDb;
+        };
+
+        serviceConfig = lib.mkIf usePostgres {
+          ExecStartPre = lib.mkBefore [
+            "+${pkgs.writeShellScript "radarr-postgres-env" ''
+              mkdir -p /run/radarr
+              echo "RADARR__POSTGRES__PASSWORD=$(cat ${pgCfg.passwordFile})" > /run/radarr/postgres.env
+              chown ${cfg.user}:${cfg.group} /run/radarr/postgres.env
+              chmod 400 /run/radarr/postgres.env
+            ''}"
+          ];
+          EnvironmentFile = lib.mkIf (pgCfg.passwordFile != null) "/run/radarr/postgres.env";
+        };
+
+        after = lib.mkIf usePostgres [ "postgresql.service" "media-postgres-setup.service" ];
+        requires = lib.mkIf usePostgres [ "postgresql.service" ];
+      };
+    };
 
     # Firewall configuration
     networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [

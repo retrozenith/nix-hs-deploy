@@ -33,8 +33,7 @@
     # Use the built-in NixOS Jellyseerr service
     services.jellyseerr = {
       enable = true;
-      port = config.services.jellyseerrServer.port;
-      openFirewall = config.services.jellyseerrServer.openFirewall;
+      inherit (config.services.jellyseerrServer) port openFirewall;
     };
 
     # Create data directory

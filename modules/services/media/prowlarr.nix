@@ -54,39 +54,44 @@ in
     # Use the built-in NixOS Prowlarr service
     services.prowlarr = {
       enable = true;
-      openFirewall = cfg.openFirewall;
+      inherit (cfg) openFirewall;
     };
 
-    # Create data directory
-    systemd.tmpfiles.rules = [
-      "d ${cfg.dataDir} 0750 prowlarr prowlarr -"
-    ];
-
-    # PostgreSQL environment variables for Prowlarr
-    systemd.services.prowlarr.environment = lib.mkIf usePostgres {
-      PROWLARR__POSTGRES__HOST = pgCfg.host;
-      PROWLARR__POSTGRES__PORT = toString pgCfg.port;
-      PROWLARR__POSTGRES__USER = pgCfg.prowlarr.user;
-      PROWLARR__POSTGRES__MAINDB = pgCfg.prowlarr.mainDb;
-      PROWLARR__POSTGRES__LOGDB = pgCfg.prowlarr.logDb;
-    };
-
-    # Load password from file via EnvironmentFile
-    systemd.services.prowlarr.serviceConfig = lib.mkIf usePostgres {
-      ExecStartPre = lib.mkBefore [
-        "+${pkgs.writeShellScript "prowlarr-postgres-env" ''
-          mkdir -p /run/prowlarr
-          echo "PROWLARR__POSTGRES__PASSWORD=$(cat ${pgCfg.passwordFile})" > /run/prowlarr/postgres.env
-          chown prowlarr:prowlarr /run/prowlarr/postgres.env
-          chmod 400 /run/prowlarr/postgres.env
-        ''}"
+    # Systemd configuration
+    systemd = {
+      # Create data directory
+      tmpfiles.rules = [
+        "d ${cfg.dataDir} 0750 prowlarr prowlarr -"
       ];
-      EnvironmentFile = lib.mkIf (pgCfg.passwordFile != null) "/run/prowlarr/postgres.env";
-    };
 
-    # Ensure PostgreSQL is ready before Prowlarr starts
-    systemd.services.prowlarr.after = lib.mkIf usePostgres [ "postgresql.service" "media-postgres-setup.service" ];
-    systemd.services.prowlarr.requires = lib.mkIf usePostgres [ "postgresql.service" ];
+      services.prowlarr = {
+        # PostgreSQL environment variables for Prowlarr
+        environment = lib.mkIf usePostgres {
+          PROWLARR__POSTGRES__HOST = pgCfg.host;
+          PROWLARR__POSTGRES__PORT = toString pgCfg.port;
+          PROWLARR__POSTGRES__USER = pgCfg.prowlarr.user;
+          PROWLARR__POSTGRES__MAINDB = pgCfg.prowlarr.mainDb;
+          PROWLARR__POSTGRES__LOGDB = pgCfg.prowlarr.logDb;
+        };
+
+        # Load password from file via EnvironmentFile
+        serviceConfig = lib.mkIf usePostgres {
+          ExecStartPre = lib.mkBefore [
+            "+${pkgs.writeShellScript "prowlarr-postgres-env" ''
+              mkdir -p /run/prowlarr
+              echo "PROWLARR__POSTGRES__PASSWORD=$(cat ${pgCfg.passwordFile})" > /run/prowlarr/postgres.env
+              chown prowlarr:prowlarr /run/prowlarr/postgres.env
+              chmod 400 /run/prowlarr/postgres.env
+            ''}"
+          ];
+          EnvironmentFile = lib.mkIf (pgCfg.passwordFile != null) "/run/prowlarr/postgres.env";
+        };
+
+        # Ensure PostgreSQL is ready before Prowlarr starts
+        after = lib.mkIf usePostgres [ "postgresql.service" "media-postgres-setup.service" ];
+        requires = lib.mkIf usePostgres [ "postgresql.service" ];
+      };
+    };
 
     # Firewall configuration
     networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [

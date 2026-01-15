@@ -77,53 +77,54 @@ in
     # Use the built-in NixOS Sonarr service
     services.sonarr = {
       enable = true;
-      user = cfg.user;
-      group = cfg.group;
-      dataDir = cfg.dataDir;
-      openFirewall = cfg.openFirewall;
+      inherit (cfg) user group dataDir openFirewall;
     };
 
     # Create user if using default
     users.users.${cfg.user} = lib.mkIf (cfg.user == "sonarr") {
       isSystemUser = true;
-      group = cfg.group;
+      inherit (cfg) group;
       home = cfg.dataDir;
     };
 
     # Ensure media group exists
     users.groups.${cfg.group} = { };
 
-    # Create directories with proper permissions
-    systemd.tmpfiles.rules = [
-      "d ${cfg.dataDir} 0750 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.mediaDir} 0775 ${cfg.user} ${cfg.group} -"
-    ];
-
-    # PostgreSQL environment variables for Sonarr
-    systemd.services.sonarr.environment = lib.mkIf usePostgres {
-      SONARR__POSTGRES__HOST = pgCfg.host;
-      SONARR__POSTGRES__PORT = toString pgCfg.port;
-      SONARR__POSTGRES__USER = pgCfg.sonarr.user;
-      SONARR__POSTGRES__MAINDB = pgCfg.sonarr.mainDb;
-      SONARR__POSTGRES__LOGDB = pgCfg.sonarr.logDb;
-    };
-
-    # Load password from file via EnvironmentFile
-    systemd.services.sonarr.serviceConfig = lib.mkIf usePostgres {
-      ExecStartPre = lib.mkBefore [
-        "+${pkgs.writeShellScript "sonarr-postgres-env" ''
-          mkdir -p /run/sonarr
-          echo "SONARR__POSTGRES__PASSWORD=$(cat ${pgCfg.passwordFile})" > /run/sonarr/postgres.env
-          chown ${cfg.user}:${cfg.group} /run/sonarr/postgres.env
-          chmod 400 /run/sonarr/postgres.env
-        ''}"
+    # Create directories with proper permissions and configure systemd
+    systemd = {
+      tmpfiles.rules = [
+        "d ${cfg.dataDir} 0750 ${cfg.user} ${cfg.group} -"
+        "d ${cfg.mediaDir} 0775 ${cfg.user} ${cfg.group} -"
       ];
-      EnvironmentFile = lib.mkIf (pgCfg.passwordFile != null) "/run/sonarr/postgres.env";
-    };
 
-    # Ensure PostgreSQL is ready before Sonarr starts
-    systemd.services.sonarr.after = lib.mkIf usePostgres [ "postgresql.service" "media-postgres-setup.service" ];
-    systemd.services.sonarr.requires = lib.mkIf usePostgres [ "postgresql.service" ];
+      services.sonarr = {
+        # PostgreSQL environment variables for Sonarr
+        environment = lib.mkIf usePostgres {
+          SONARR__POSTGRES__HOST = pgCfg.host;
+          SONARR__POSTGRES__PORT = toString pgCfg.port;
+          SONARR__POSTGRES__USER = pgCfg.sonarr.user;
+          SONARR__POSTGRES__MAINDB = pgCfg.sonarr.mainDb;
+          SONARR__POSTGRES__LOGDB = pgCfg.sonarr.logDb;
+        };
+
+        # Load password from file via EnvironmentFile
+        serviceConfig = lib.mkIf usePostgres {
+          ExecStartPre = lib.mkBefore [
+            "+${pkgs.writeShellScript "sonarr-postgres-env" ''
+              mkdir -p /run/sonarr
+              echo "SONARR__POSTGRES__PASSWORD=$(cat ${pgCfg.passwordFile})" > /run/sonarr/postgres.env
+              chown ${cfg.user}:${cfg.group} /run/sonarr/postgres.env
+              chmod 400 /run/sonarr/postgres.env
+            ''}"
+          ];
+          EnvironmentFile = lib.mkIf (pgCfg.passwordFile != null) "/run/sonarr/postgres.env";
+        };
+
+        # Ensure PostgreSQL is ready before Sonarr starts
+        after = lib.mkIf usePostgres [ "postgresql.service" "media-postgres-setup.service" ];
+        requires = lib.mkIf usePostgres [ "postgresql.service" ];
+      };
+    };
 
     # Firewall configuration
     networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [

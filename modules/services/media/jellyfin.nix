@@ -85,17 +85,13 @@
     # Use the built-in NixOS Jellyfin service
     services.jellyfin = {
       enable = true;
-      user = config.services.jellyfinServer.user;
-      group = config.services.jellyfinServer.group;
-      dataDir = config.services.jellyfinServer.dataDir;
-      cacheDir = config.services.jellyfinServer.cacheDir;
-      openFirewall = config.services.jellyfinServer.openFirewall;
+      inherit (config.services.jellyfinServer) user group dataDir cacheDir openFirewall;
     };
 
     # Create user and group if using defaults
     users.users.${config.services.jellyfinServer.user} = lib.mkIf (config.services.jellyfinServer.user == "jellyfin") {
       isSystemUser = true;
-      group = config.services.jellyfinServer.group;
+      inherit (config.services.jellyfinServer) group;
       extraGroups = lib.optionals config.services.jellyfinServer.hardwareAcceleration.enable [
         "video"
         "render"
@@ -121,8 +117,7 @@
     # Create media directories with proper permissions
     systemd.tmpfiles.rules =
       let
-        user = config.services.jellyfinServer.user;
-        group = config.services.jellyfinServer.group;
+        inherit (config.services.jellyfinServer) user group;
       in [
         "d ${config.services.jellyfinServer.dataDir} 0750 ${user} ${group} -"
         "d ${config.services.jellyfinServer.cacheDir} 0750 ${user} ${group} -"

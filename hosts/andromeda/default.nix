@@ -12,58 +12,6 @@
     ../../modules/services/media
   ];
 
-  # Dynamic MOTD with system info and service links
-  services.motd = {
-    enable = true;
-    # External domains shown in MOTD (optional - uncomment and customize)
-    # externalDomains = {
-    #   Jellyfin = "jf.yourdomain.com";
-    #   Vaultwarden = "vault.yourdomain.com";
-    #   Jellyseerr = "request.yourdomain.com";
-    #   Prowlarr = "prowlarr.yourdomain.com";
-    #   Streamystats = "stats.yourdomain.com";
-    # };
-  };
-
-  # Enable all media services with common configuration
-  services.mediaServices = {
-    enable = true;
-    mediaGroup = "media";
-    baseMediaDir = "/srv/storage/media";
-    baseDownloadDir = "/srv/storage/downloads";
-
-    # PostgreSQL backend for Sonarr, Radarr, Prowlarr (optional - better performance)
-    # Uncomment to enable centralized PostgreSQL instead of SQLite
-    # usePostgres = true;
-    # postgresPasswordFile = config.age.secrets.media-postgres-password.path;
-  };
-
-  # Jellyfin with hardware acceleration
-  services.jellyfinServer = {
-    hardwareAcceleration.enable = true;
-    hardwareAcceleration.type = "vaapi";
-  };
-
-  # qBittorrent with VPN (Gluetun)
-  services.qbittorrentVpn = {
-    enable = true;
-    vpnProvider = "nordvpn";
-    vpnType = "wireguard";
-    serverCountries = "Romania";
-    wireguardPrivateKeyFile = config.age.secrets.gluetun-wireguard-key.path;
-    webuiPort = 8080;
-    peerPort = 6881;
-    downloadDir = "/srv/storage/downloads";
-  };
-
-  # Streamystats - Jellyfin analytics
-  services.streamystats = {
-    enable = true;
-    port = 3000;
-    sessionSecretFile = config.age.secrets.streamystats-session-secret.path;
-    postgres.passwordFile = config.age.secrets.streamystats-postgres-password.path;
-  };
-
   # MergerFS storage pool configuration
   storage.mergerfs = {
     enable = true;
@@ -94,113 +42,168 @@
     ];
   };
 
-  # Caddy reverse proxy for services
-  services.caddyProxy = {
-    enable = true;
-    email = "admin@example.com";  # Change to your email
-
-    jellyfin = {
+  # Consolidate all services configuration
+  services = {
+    # Dynamic MOTD with system info and service links
+    motd = {
       enable = true;
-      domainFile = config.age.secrets.domain-jellyfin.path;
-      port = 8096;
+      # External domains shown in MOTD (optional - uncomment and customize)
+      # externalDomains = {
+      #   Jellyfin = "jf.yourdomain.com";
+      #   Vaultwarden = "vault.yourdomain.com";
+      #   Jellyseerr = "request.yourdomain.com";
+      #   Prowlarr = "prowlarr.yourdomain.com";
+      #   Streamystats = "stats.yourdomain.com";
+      # };
     };
 
-    vaultwarden = {
+    # Enable all media services with common configuration
+    mediaServices = {
+      enable = true;
+      mediaGroup = "media";
+      baseMediaDir = "/srv/storage/media";
+      baseDownloadDir = "/srv/storage/downloads";
+
+      # PostgreSQL backend for Sonarr, Radarr, Prowlarr (optional - better performance)
+      # Uncomment to enable centralized PostgreSQL instead of SQLite
+      # usePostgres = true;
+      # postgresPasswordFile = config.age.secrets.media-postgres-password.path;
+    };
+
+    # Jellyfin with hardware acceleration
+    jellyfinServer = {
+      hardwareAcceleration.enable = true;
+      hardwareAcceleration.type = "vaapi";
+    };
+
+    # qBittorrent with VPN (Gluetun)
+    qbittorrentVpn = {
+      enable = true;
+      vpnProvider = "nordvpn";
+      vpnType = "wireguard";
+      serverCountries = "Romania";
+      wireguardPrivateKeyFile = config.age.secrets.gluetun-wireguard-key.path;
+      webuiPort = 8080;
+      peerPort = 6881;
+      downloadDir = "/srv/storage/downloads";
+    };
+
+    # Streamystats - Jellyfin analytics
+    streamystats = {
+      enable = true;
+      port = 3000;
+      sessionSecretFile = config.age.secrets.streamystats-session-secret.path;
+      postgres.passwordFile = config.age.secrets.streamystats-postgres-password.path;
+    };
+
+    # Caddy reverse proxy for services
+    caddyProxy = {
+      enable = true;
+      email = "admin@example.com";  # Change to your email
+
+      jellyfin = {
+        enable = true;
+        domainFile = config.age.secrets.domain-jellyfin.path;
+        port = 8096;
+      };
+
+      vaultwarden = {
+        enable = true;
+        domainFile = config.age.secrets.domain-vault.path;
+        port = 8222;
+        websocketPort = 3012;
+      };
+
+      prowlarr = {
+        enable = true;
+        domainFile = config.age.secrets.domain-prowlarr.path;
+        port = 9696;
+      };
+
+      jellyseerr = {
+        enable = true;
+        domainFile = config.age.secrets.domain-request.path;
+        port = 5055;
+      };
+
+      streamystats = {
+        enable = true;
+        domainFile = config.age.secrets.domain-streamystats.path;
+        port = 3000;
+      };
+
+      tailscaleOnly = false;
+    };
+
+    # Vaultwarden - Self-hosted password manager
+    vaultwardenConfig = {
       enable = true;
       domainFile = config.age.secrets.domain-vault.path;
       port = 8222;
       websocketPort = 3012;
+      signupsAllowed = false;
+      invitationsAllowed = true;
+      adminTokenFile = config.age.secrets.vaultwarden-admin-token.path;
     };
 
-    prowlarr = {
+    # Cloudflare DDNS
+    cloudflareDdns = {
       enable = true;
-      domainFile = config.age.secrets.domain-prowlarr.path;
-      port = 9696;
+      apiTokenFile = config.age.secrets.cloudflare-api-token.path;
+      zoneIdFile = config.age.secrets.cloudflare-zone-id.path;
+      interval = "5m";
+      ipv4.enable = true;
+      ipv6.enable = false;
+
+      domains = [
+        {
+          nameFile = config.age.secrets.domain-jellyfin.path;
+          proxied = true;
+          type = "A";
+          ttl = 1;
+        }
+        {
+          nameFile = config.age.secrets.domain-prowlarr.path;
+          proxied = true;
+          type = "A";
+          ttl = 1;
+        }
+        {
+          nameFile = config.age.secrets.domain-vault.path;
+          proxied = true;
+          type = "A";
+          ttl = 1;
+        }
+        {
+          nameFile = config.age.secrets.domain-request.path;
+          proxied = true;
+          type = "A";
+          ttl = 1;
+        }
+        {
+          nameFile = config.age.secrets.domain-auth.path;
+          proxied = true;
+          type = "A";
+          ttl = 1;
+        }
+        {
+          nameFile = config.age.secrets.domain-streamystats.path;
+          proxied = true;
+          type = "A";
+          ttl = 1;
+        }
+      ];
     };
 
-    jellyseerr = {
+    # Tailscale VPN
+    tailscaleConfig = {
       enable = true;
-      domainFile = config.age.secrets.domain-request.path;
-      port = 5055;
+      authKeyFile = config.age.secrets.tailscale-auth-key.path;
+      hostname = "andromeda";
+      enableSSH = true;
+      acceptRoutes = true;
+      tags = [ "tag:server" "tag:media" ];
     };
-
-    streamystats = {
-      enable = true;
-      domainFile = config.age.secrets.domain-streamystats.path;
-      port = 3000;
-    };
-
-    tailscaleOnly = false;
-  };
-
-  # Vaultwarden - Self-hosted password manager
-  services.vaultwardenConfig = {
-    enable = true;
-    domainFile = config.age.secrets.domain-vault.path;
-    port = 8222;
-    websocketPort = 3012;
-    signupsAllowed = false;
-    invitationsAllowed = true;
-    adminTokenFile = config.age.secrets.vaultwarden-admin-token.path;
-  };
-
-  # Cloudflare DDNS
-  services.cloudflareDdns = {
-    enable = true;
-    apiTokenFile = config.age.secrets.cloudflare-api-token.path;
-    zoneIdFile = config.age.secrets.cloudflare-zone-id.path;
-    interval = "5m";
-    ipv4.enable = true;
-    ipv6.enable = false;
-
-    domains = [
-      {
-        nameFile = config.age.secrets.domain-jellyfin.path;
-        proxied = true;
-        type = "A";
-        ttl = 1;
-      }
-      {
-        nameFile = config.age.secrets.domain-prowlarr.path;
-        proxied = true;
-        type = "A";
-        ttl = 1;
-      }
-      {
-        nameFile = config.age.secrets.domain-vault.path;
-        proxied = true;
-        type = "A";
-        ttl = 1;
-      }
-      {
-        nameFile = config.age.secrets.domain-request.path;
-        proxied = true;
-        type = "A";
-        ttl = 1;
-      }
-      {
-        nameFile = config.age.secrets.domain-auth.path;
-        proxied = true;
-        type = "A";
-        ttl = 1;
-      }
-      {
-        nameFile = config.age.secrets.domain-streamystats.path;
-        proxied = true;
-        type = "A";
-        ttl = 1;
-      }
-    ];
-  };
-
-  # Tailscale VPN
-  services.tailscaleConfig = {
-    enable = true;
-    authKeyFile = config.age.secrets.tailscale-auth-key.path;
-    hostname = "andromeda";
-    enableSSH = true;
-    acceptRoutes = true;
-    tags = [ "tag:server" "tag:media" ];
   };
 
   # Boot configuration
@@ -211,7 +214,7 @@
 
   # Networking
   networking = {
-    hostName = hostName;
+    inherit hostName;
     networkmanager.enable = true;
     useDHCP = false;  # Explicitly disable global DHCP since we use static IP
 

@@ -225,7 +225,7 @@ in
 
   config = lib.mkIf cfg.enable {
     # Disable the default NixOS MOTD
-    users.motd = null;
+    users.motd = lib.mkForce "";
 
     # Create the dynamic MOTD script
     environment.etc."profile.d/motd.sh" = {

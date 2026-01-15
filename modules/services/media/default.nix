@@ -70,46 +70,48 @@
     ];
 
     # Enable individual services with sensible defaults
-    services.jellyfinServer = {
-      enable = lib.mkDefault true;
-      group = config.services.mediaServices.mediaGroup;
-      mediaDirs = [
-        "${config.services.mediaServices.baseMediaDir}/movies"
-        "${config.services.mediaServices.baseMediaDir}/tv"
-        "${config.services.mediaServices.baseMediaDir}/music"
-        "${config.services.mediaServices.baseMediaDir}/anime"
-      ];
-    };
+    services = {
+      jellyfinServer = {
+        enable = lib.mkDefault true;
+        group = config.services.mediaServices.mediaGroup;
+        mediaDirs = [
+          "${config.services.mediaServices.baseMediaDir}/movies"
+          "${config.services.mediaServices.baseMediaDir}/tv"
+          "${config.services.mediaServices.baseMediaDir}/music"
+          "${config.services.mediaServices.baseMediaDir}/anime"
+        ];
+      };
 
-    services.sonarrServer = {
-      enable = lib.mkDefault true;
-      group = config.services.mediaServices.mediaGroup;
-      mediaDir = "${config.services.mediaServices.baseMediaDir}/tv";
-      downloadDir = config.services.mediaServices.baseDownloadDir;
-      postgres.enable = config.services.mediaServices.usePostgres;
-    };
+      sonarrServer = {
+        enable = lib.mkDefault true;
+        group = config.services.mediaServices.mediaGroup;
+        mediaDir = "${config.services.mediaServices.baseMediaDir}/tv";
+        downloadDir = config.services.mediaServices.baseDownloadDir;
+        postgres.enable = config.services.mediaServices.usePostgres;
+      };
 
-    services.radarrServer = {
-      enable = lib.mkDefault true;
-      group = config.services.mediaServices.mediaGroup;
-      mediaDir = "${config.services.mediaServices.baseMediaDir}/movies";
-      downloadDir = config.services.mediaServices.baseDownloadDir;
-      postgres.enable = config.services.mediaServices.usePostgres;
-    };
+      radarrServer = {
+        enable = lib.mkDefault true;
+        group = config.services.mediaServices.mediaGroup;
+        mediaDir = "${config.services.mediaServices.baseMediaDir}/movies";
+        downloadDir = config.services.mediaServices.baseDownloadDir;
+        postgres.enable = config.services.mediaServices.usePostgres;
+      };
 
-    services.prowlarrServer = {
-      enable = lib.mkDefault true;
-      postgres.enable = config.services.mediaServices.usePostgres;
-    };
+      prowlarrServer = {
+        enable = lib.mkDefault true;
+        postgres.enable = config.services.mediaServices.usePostgres;
+      };
 
-    # Centralized PostgreSQL for media services
-    services.mediaPostgres = lib.mkIf config.services.mediaServices.usePostgres {
-      enable = true;
-      passwordFile = config.services.mediaServices.postgresPasswordFile;
-    };
+      # Centralized PostgreSQL for media services
+      mediaPostgres = lib.mkIf config.services.mediaServices.usePostgres {
+        enable = true;
+        passwordFile = config.services.mediaServices.postgresPasswordFile;
+      };
 
-    services.jellyseerrServer = {
-      enable = lib.mkDefault true;
+      jellyseerrServer = {
+        enable = lib.mkDefault true;
+      };
     };
   };
 }

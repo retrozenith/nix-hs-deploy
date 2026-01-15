@@ -151,8 +151,7 @@
       # Individual disk mounts
       (lib.mapAttrs' (name: disk:
         lib.nameValuePair "/mnt/${name}" {
-          device = disk.device;
-          fsType = disk.fsType;
+          inherit (disk) device fsType;
           options = disk.mountOptions;
         }
       ) config.storage.mergerfs.disks)

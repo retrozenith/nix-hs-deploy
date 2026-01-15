@@ -133,13 +133,13 @@ in
     services.postgresql = {
       enable = true;
       package = pkgs.postgresql_15;
-      dataDir = cfg.dataDir;
+      inherit (cfg) dataDir;
 
       # Listen on localhost only for security
       enableTCPIP = true;
       settings = {
         listen_addresses = lib.mkDefault "127.0.0.1";
-        port = cfg.port;
+        inherit (cfg) port;
 
         # Performance tuning for media server workload
         shared_buffers = "256MB";
