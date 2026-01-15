@@ -63,30 +63,38 @@ jobs:
             - name: Setup Nix cache
               uses: DeterminateSystems/magic-nix-cache-action@main
 
-            - name: Run nixpkgs-lint
+            - name: Run statix lint
               run: |
                   echo "## Lint Results" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
 
-                  # Run nixpkgs-lint on all Nix files
-                  LINT_OUTPUT=$(nix run github:nix-community/nixpkgs-lint -- . 2>&1) || true
-
-                  if [ -z "$LINT_OUTPUT" ]; then
+                  # Run statix linter on all Nix files
+                  if nix run nixpkgs#statix -- check . 2>&1 | tee /tmp/lint-output.txt; then
                     echo "✅ No linting issues found!" >> $GITHUB_STEP_SUMMARY
                   else
                     echo "⚠️ Linting issues detected:" >> $GITHUB_STEP_SUMMARY
                     echo "" >> $GITHUB_STEP_SUMMARY
                     echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                    echo "$LINT_OUTPUT" >> $GITHUB_STEP_SUMMARY
+                    cat /tmp/lint-output.txt >> $GITHUB_STEP_SUMMARY
                     echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi
 
-                    # Print to console as well
-                    echo "$LINT_OUTPUT"
+            - name: Run deadnix (find unused code)
+              run: |
+                  echo "## Dead Code Check" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
 
-                    # Fail the job if there are issues
-                    if [ -n "$LINT_OUTPUT" ]; then
-                      exit 1
-                    fi
+                  # Run deadnix to find unused bindings
+                  if nix run nixpkgs#deadnix -- -f . 2>&1 | tee /tmp/deadnix-output.txt; then
+                    echo "✅ No unused code found!" >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "⚠️ Unused code detected:" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                    cat /tmp/deadnix-output.txt >> $GITHUB_STEP_SUMMARY
+                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                    # Don't fail on deadnix, just warn
                   fi
 
     format:
