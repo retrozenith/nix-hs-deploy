@@ -40,14 +40,7 @@ jobs:
         uses: DeterminateSystems/magic-nix-cache-action@main
 
       - name: Run nixpkgs-lint
-        run: |
-          LINT_OUTPUT=$(nix run github:nix-community/nixpkgs-lint -- . 2>&1) || true
-          if [ -n "$LINT_OUTPUT" ]; then
-            echo "::error::Linting issues detected:"
-            echo "$LINT_OUTPUT"
-            exit 1
-          fi
-          echo "✅ No linting issues found"
+        run: nix run github:nix-community/nixpkgs-lint -- .
 
       - name: Check flake
         run: nix flake check
