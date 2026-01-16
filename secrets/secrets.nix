@@ -36,6 +36,16 @@
     };
 
     # ===========================================
+    # Caddy (Let's Encrypt Email)
+    # ===========================================
+    caddy-email = {
+      file = ./caddy-email.age;
+      owner = "root";
+      group = "root";
+      mode = "0400";
+    };
+
+    # ===========================================
     # Domain Names (for Caddy & DDNS)
     # ===========================================
     domain-jellyfin = {

@@ -51,6 +51,11 @@ in
   "cloudflare-zone-id.age".publicKeys = allKeys;
 
   # ===========================================
+  # Caddy (Let's Encrypt Email)
+  # ===========================================
+  "caddy-email.age".publicKeys = allKeys;
+
+  # ===========================================
   # Domain Names (for Caddy & DDNS)
   # ===========================================
   "domain-jellyfin.age".publicKeys = allKeys;

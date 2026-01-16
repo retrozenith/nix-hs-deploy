@@ -125,7 +125,7 @@ let
     # Other services
     printf "   $(service_status caddy) %-12s" "Caddy"
     printf "   $(service_status vaultwarden) %-12s" "Vaultwarden"
-    printf "   $(container_status streamystats) %-12s\n" "Streamystats"
+    printf "   $(service_status streamystats) %-12s\n" "Streamystats"
 
     # VPN status
     if podman ps --format "{{.Names}}" 2>/dev/null | grep -q "^gluetun$"; then

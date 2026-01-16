@@ -99,7 +99,7 @@
     # Caddy reverse proxy for services
     caddyProxy = {
       enable = true;
-      email = "admin@example.com";  # Change to your email
+      emailFile = config.age.secrets.caddy-email.path;
 
       jellyfin = {
         enable = true;

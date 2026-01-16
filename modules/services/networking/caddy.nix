@@ -12,7 +12,13 @@
     email = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "Email for Let's Encrypt certificate notifications";
+      description = "Email for Let's Encrypt certificate notifications (use emailFile for secrets)";
+    };
+
+    emailFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to file containing email for Let's Encrypt (agenix secret)";
     };
 
     jellyfin = {
@@ -174,6 +180,14 @@
         in ''
           set -euo pipefail
 
+          # Read email from secret file if configured
+          ${lib.optionalString (cfg.emailFile != null) ''
+            CADDY_EMAIL=$(cat ${cfg.emailFile})
+          ''}
+          ${lib.optionalString (cfg.email != null && cfg.emailFile == null) ''
+            CADDY_EMAIL="${cfg.email}"
+          ''}
+
           # Read domains from secrets
           ${lib.optionalString (cfg.jellyfin.enable && cfg.jellyfin.domainFile != null) ''
             JELLYFIN_HOST=$(cat ${cfg.jellyfin.domainFile})
@@ -199,6 +213,12 @@
           cat > /etc/caddy/Caddyfile.generated << ENDOFFILE
           # Auto-generated Caddy configuration
           # Do not edit manually - managed by NixOS
+
+          ${lib.optionalString (cfg.emailFile != null || cfg.email != null) ''
+          {
+              email $CADDY_EMAIL
+          }
+          ''}
 
           # Common security headers snippet
           (security_headers) {

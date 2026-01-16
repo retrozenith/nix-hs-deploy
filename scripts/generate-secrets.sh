@@ -170,6 +170,7 @@ generate_secrets() {
         ["tailscale-auth-key"]="${TAILSCALE_AUTH_KEY:-}"
         ["cloudflare-api-token"]="${CLOUDFLARE_API_TOKEN:-}"
         ["cloudflare-zone-id"]="${CLOUDFLARE_ZONE_ID:-}"
+        ["caddy-email"]="${CADDY_EMAIL:-}"
         ["domain-jellyfin"]="${DOMAIN_JELLYFIN:-}"
         ["domain-prowlarr"]="${DOMAIN_PROWLARR:-}"
         ["domain-vault"]="${DOMAIN_VAULT:-}"
@@ -285,6 +286,9 @@ generate_secrets_with_age() {
     # Cloudflare
     try_create "cloudflare-api-token" "${CLOUDFLARE_API_TOKEN:-}"
     try_create "cloudflare-zone-id" "${CLOUDFLARE_ZONE_ID:-}"
+
+    # Caddy
+    try_create "caddy-email" "${CADDY_EMAIL:-}"
 
     # Domains
     try_create "domain-jellyfin" "${DOMAIN_JELLYFIN:-}"
