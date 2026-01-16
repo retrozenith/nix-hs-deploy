@@ -127,6 +127,12 @@
         MemoryDenyWriteExecute = true;
         RestrictRealtime = true;
         PrivateDevices = true;
+        
+        # Load credentials for access to root-owned secrets
+        LoadCredential = [
+          "api-token:${cfg.apiTokenFile}"
+          "zone-id:${cfg.zoneIdFile}"
+        ];
       };
 
       script = let
@@ -136,9 +142,9 @@
 
         STATE_DIR="/var/lib/cloudflare-ddns"
 
-        # Read API token and Zone ID from secrets
-        API_TOKEN=$(cat ${cfg.apiTokenFile})
-        ZONE_ID=$(cat ${cfg.zoneIdFile})
+        # Read API token and Zone ID from credentials
+        API_TOKEN=$(cat "$CREDENTIALS_DIRECTORY/api-token")
+        ZONE_ID=$(cat "$CREDENTIALS_DIRECTORY/zone-id")
 
         # Function to get current public IP
         get_public_ip() {
