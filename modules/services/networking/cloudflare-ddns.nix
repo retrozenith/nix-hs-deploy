@@ -132,11 +132,20 @@
         LoadCredential = [
           "api-token:${config.services.cloudflareDdns.apiTokenFile}"
           "zone-id:${config.services.cloudflareDdns.zoneIdFile}"
-        ];
+        ] ++ (
+          lib.imap0 (i: domain: 
+            if domain.nameFile != null 
+            then "domain-${toString i}:${domain.nameFile}" 
+            else ""
+          ) (lib.filter (d: d.nameFile != null) cfg.domains)
+        );
       };
 
       script = let
         cfg = config.services.cloudflareDdns;
+        # Helper to get credential ID for a domain
+        getDomainCredId = domain: i:
+          if domain.nameFile != null then "domain-${toString i}" else null;
       in ''
         set -euo pipefail
 
@@ -232,10 +241,10 @@
         ''}
 
         # Process each domain
-        ${lib.concatMapStringsSep "\n" (domain: ''
+        ${lib.concatMapStringsSep "\n" (item: let i = item.index; domain = item.data; in ''
           # Get domain name (from file or direct)
           ${if domain.nameFile != null then ''
-            DOMAIN_NAME=$(cat ${domain.nameFile})
+            DOMAIN_NAME=$(cat "$CREDENTIALS_DIRECTORY/domain-${toString i}")
           '' else ''
             DOMAIN_NAME="${domain.name}"
           ''}
@@ -269,7 +278,7 @@
               fi
             fi
           ''}
-        '') cfg.domains}
+        '') (lib.imap0 (i: d: { index = i; data = d; }) cfg.domains)}
 
         echo "DDNS update completed at $(date)"
       '';
