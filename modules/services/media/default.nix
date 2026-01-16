@@ -16,6 +16,8 @@
     ./qbittorrent-vpn.nix
     ./streamystats.nix
     ./postgres.nix
+    ./flaresolverr.nix
+    ./profilarr.nix
   ];
 
   # Common media group for shared file access
@@ -110,6 +112,14 @@
       };
 
       jellyseerrServer = {
+        enable = lib.mkDefault true;
+      };
+
+      flaresolverrServer = {
+        enable = lib.mkDefault true;
+      };
+
+      profilarrServer = {
         enable = lib.mkDefault true;
       };
     };
