@@ -130,8 +130,8 @@
         
         # Load credentials for access to root-owned secrets
         LoadCredential = [
-          "api-token:${cfg.apiTokenFile}"
-          "zone-id:${cfg.zoneIdFile}"
+          "api-token:${config.services.cloudflareDdns.apiTokenFile}"
+          "zone-id:${config.services.cloudflareDdns.zoneIdFile}"
         ];
       };
 
