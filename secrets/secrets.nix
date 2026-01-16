@@ -139,7 +139,8 @@
   };
 
   # SSH key used by the host to decrypt secrets
-  age.identityPaths = [
-    "/etc/ssh/ssh_host_ed25519_key"
-  ];
+  # The default uses config.services.openssh.hostKeys which includes:
+  #   - /etc/ssh/ssh_host_ed25519_key
+  #   - /etc/ssh/ssh_host_rsa_key
+  # This is handled automatically by the agenix module
 }
