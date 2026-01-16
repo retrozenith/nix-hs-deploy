@@ -36,7 +36,7 @@
 
     baseDownloadDir = lib.mkOption {
       type = lib.types.path;
-      default = "/srv/downloads";
+      default = "/srv/storage/downloads";
       description = "Base directory for downloads";
     };
 

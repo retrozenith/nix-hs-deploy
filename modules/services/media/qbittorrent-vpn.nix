@@ -75,9 +75,11 @@
     users.users.qbittorrent = {
       isSystemUser = true;
       group = "qbittorrent";
+      extraGroups = [ "media" ];
       uid = 850; # Fixed UID for container compatibility
     };
 
+    # ... (skipping some lines for brevity in replacement, but I will include them to match target)
     users.groups.qbittorrent = {
       gid = 850; # Fixed GID for container compatibility
     };
@@ -86,7 +88,7 @@
     systemd.tmpfiles.rules = [
       "d ${config.services.qbittorrentVpn.dataDir} 0750 root root -"
       "d ${config.services.qbittorrentVpn.configDir} 0750 qbittorrent qbittorrent -"
-      "d ${config.services.qbittorrentVpn.downloadDir} 0775 qbittorrent qbittorrent -"
+      "d ${config.services.qbittorrentVpn.downloadDir} 0775 qbittorrent media -"
     ];
 
     # Enable podman for containers
@@ -149,7 +151,7 @@
 
         volumes = [
           "${config.services.qbittorrentVpn.configDir}:/config:rw"
-          "${config.services.qbittorrentVpn.downloadDir}:/torrents:rw"
+          "${config.services.qbittorrentVpn.downloadDir}:${config.services.qbittorrentVpn.downloadDir}:rw"
         ];
 
         environment = {
