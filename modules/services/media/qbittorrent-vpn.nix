@@ -128,7 +128,7 @@
           TZ = config.time.timeZone;
           FIREWALL_VPN_INPUT_PORTS = toString config.services.qbittorrentVpn.peerPort;
           DOT = "off";
-          DNS_ADDRESS = lib.concatStringsSep "," config.services.qbittorrentVpn.dns;
+          DNS_ADDRESS = builtins.head config.services.qbittorrentVpn.dns;
         };
 
         environmentFiles = [
