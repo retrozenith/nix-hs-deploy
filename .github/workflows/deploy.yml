@@ -115,9 +115,11 @@ jobs:
       - name: Deploy to ${{ inputs.host }}
         if: inputs.action != 'dry-run'
         run: |
-          nix copy --to ssh://${{ secrets.DEPLOY_USER }}@${{ steps.target.outputs.host }} ./result
+          STORE_PATH=$(readlink -f ./result)
+          echo "Deploying system: $STORE_PATH"
+          nix copy --to ssh://${{ secrets.DEPLOY_USER }}@${{ steps.target.outputs.host }} $STORE_PATH
           ssh ${{ secrets.DEPLOY_USER }}@${{ steps.target.outputs.host }} \
-            "sudo nix-env -p /nix/var/nix/profiles/system --set $(readlink -f ./result) && sudo ./result/bin/switch-to-configuration ${{ inputs.action }}"
+            "sudo nix-env -p /nix/var/nix/profiles/system --set $STORE_PATH && sudo $STORE_PATH/bin/switch-to-configuration ${{ inputs.action }}"
 
       - name: Dry run summary
         if: inputs.action == 'dry-run'
