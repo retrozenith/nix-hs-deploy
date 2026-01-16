@@ -31,6 +31,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Default values
 SERVER_IP="${SERVER_IP:-192.168.0.26}"
 SERVER_USER="${SERVER_USER:-cvictor}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/andromeda_deploy}"
 USE_TAILSCALE=false
 TAILSCALE_HOSTNAME="andromeda"
 BUILD_ONLY=false
@@ -213,16 +214,36 @@ deploy_configuration() {
     cd "$PROJECT_ROOT"
 
     local start_time=$(date +%s)
+    local deploy_success=false
 
-    if nixos-rebuild "$DEPLOY_ACTION" \
-        --flake ".#andromeda" \
-        --target-host "$target_host" \
-        $use_sudo \
-        --show-trace; then
+    # Use nixos-rebuild from nixpkgs if not available locally
+    if command -v nixos-rebuild &> /dev/null; then
+        log_info "Using local nixos-rebuild"
+        if NIX_SSHOPTS="-i $SSH_KEY" nixos-rebuild "$DEPLOY_ACTION" \
+            --flake ".#andromeda" \
+            --target-host "$target_host" \
+            $use_sudo \
+            --show-trace; then
+            deploy_success=true
+        fi
+    else
+        log_info "Using nixos-rebuild from nixpkgs (non-NixOS host detected)"
+        if NIX_SSHOPTS="-i $SSH_KEY" nix \
+            --extra-experimental-features nix-command \
+            --extra-experimental-features flakes \
+            run nixpkgs#nixos-rebuild -- "$DEPLOY_ACTION" \
+            --flake ".#andromeda" \
+            --target-host "$target_host" \
+            $use_sudo \
+            --show-trace; then
+            deploy_success=true
+        fi
+    fi
 
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
 
+    if [[ "$deploy_success" == "true" ]]; then
         echo ""
         log_success "Deployment completed in ${duration}s"
 
@@ -275,7 +296,7 @@ preflight_checks() {
             target="$SERVER_IP"
         fi
 
-        if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "${SERVER_USER}@${target}" "true" 2>/dev/null; then
+        if ! ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes "${SERVER_USER}@${target}" "true" 2>/dev/null; then
             log_error "Cannot connect to ${SERVER_USER}@${target}"
             log_info "Check that:"
             log_info "  - Server is running"
