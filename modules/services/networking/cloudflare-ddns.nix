@@ -109,6 +109,7 @@
       path = with pkgs; [ curl jq ];
 
       serviceConfig = {
+
         Type = "oneshot";
         DynamicUser = true;
         StateDirectory = "cloudflare-ddns";
@@ -133,19 +134,22 @@
           "api-token:${config.services.cloudflareDdns.apiTokenFile}"
           "zone-id:${config.services.cloudflareDdns.zoneIdFile}"
         ] ++ (
+          # Generate credentials for domain secrets
           lib.imap0 (i: domain: 
             if domain.nameFile != null 
             then "domain-${toString i}:${domain.nameFile}" 
             else ""
-          ) (lib.filter (d: d.nameFile != null) cfg.domains)
+          ) (lib.filter (d: d.nameFile != null) config.services.cloudflareDdns.domains)
         );
       };
 
       script = let
         cfg = config.services.cloudflareDdns;
-        # Helper to get credential ID for a domain
-        getDomainCredId = domain: i:
-          if domain.nameFile != null then "domain-${toString i}" else null;
+        # Helper to get credential path if nameFile is used
+        getDomainCmd = i: domain:
+          if domain.nameFile != null 
+          then "cat \"$CREDENTIALS_DIRECTORY/domain-${toString i}\""
+          else "echo \"${domain.name}\"";
       in ''
         set -euo pipefail
 
@@ -242,12 +246,8 @@
 
         # Process each domain
         ${lib.concatMapStringsSep "\n" (item: let i = item.index; domain = item.data; in ''
-          # Get domain name (from file or direct)
-          ${if domain.nameFile != null then ''
-            DOMAIN_NAME=$(cat "$CREDENTIALS_DIRECTORY/domain-${toString i}")
-          '' else ''
-            DOMAIN_NAME="${domain.name}"
-          ''}
+          # Get domain name
+          DOMAIN_NAME=$(${getDomainCmd i domain})
 
           echo "Processing domain: $DOMAIN_NAME"
 
