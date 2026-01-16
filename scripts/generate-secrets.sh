@@ -218,27 +218,18 @@ generate_secrets_with_age() {
     # Extract public keys from secrets.nix and convert to age format
     log_info "Reading public keys from secrets.nix..."
 
-    # Create a temporary recipients file
+    # Create a temporary recipients file with SSH public keys directly
+    # age can natively encrypt/decrypt with SSH keys - no conversion needed
     RECIPIENTS_FILE=$(mktemp)
 
-    # Check if ssh-to-age is available
-    if ! command -v ssh-to-age &> /dev/null; then
-        log_error "ssh-to-age not found. Install with: nix profile install nixpkgs#ssh-to-age"
-        exit 1
-    fi
-
     # Extract SSH public keys from secrets.nix (excluding commented lines)
-    # and convert them to age format
+    # Use the SSH key format directly (age supports this natively)
     while read -r ssh_key; do
-        age_key=$(echo "$ssh_key" | ssh-to-age 2>/dev/null) || {
-            log_warn "Failed to convert key: $ssh_key"
-            continue
-        }
-        echo "$age_key" >> "$RECIPIENTS_FILE"
+        echo "$ssh_key" >> "$RECIPIENTS_FILE"
     done < <(grep -v '^\s*#' "$SECRETS_NIX" | grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+' | sort -u)
 
     if [[ ! -s "$RECIPIENTS_FILE" ]]; then
-        log_error "No valid SSH keys found in secrets.nix (or conversion failed)"
+        log_error "No valid SSH keys found in secrets.nix"
         rm -f "$RECIPIENTS_FILE"
         exit 1
     fi
@@ -246,7 +237,7 @@ generate_secrets_with_age() {
     log_info "Found $(wc -l < "$RECIPIENTS_FILE") recipient key(s)"
     echo ""
 
-    # Create each secret
+    # Create each secret - using SSH public keys directly
     create_age_secret() {
         local name="$1"
         local value="$2"
@@ -257,7 +248,14 @@ generate_secrets_with_age() {
             return 1
         fi
 
-        echo -n "$value" | age -R "$RECIPIENTS_FILE" -o "$file" 2>/dev/null
+        # Build recipient arguments for each SSH key
+        local recipient_args=""
+        while read -r key; do
+            recipient_args="$recipient_args -r '$key'"
+        done < "$RECIPIENTS_FILE"
+
+        # Create the encrypted file using SSH public keys directly
+        eval "echo -n '$value' | age $recipient_args -o '$file'" 2>/dev/null
 
         if [[ -f "$file" ]]; then
             log_success "Created $name.age"
