@@ -196,34 +196,36 @@ in
         Group = "postgres";
       };
 
-      script = let
-        psql = "${config.services.postgresql.package}/bin/psql";
-      in ''
-        set -euo pipefail
+      script =
+        let
+          psql = "${config.services.postgresql.package}/bin/psql";
+        in
+        ''
+          set -euo pipefail
 
-        PASSWORD=$(cat ${cfg.passwordFile})
+          PASSWORD=$(cat ${cfg.passwordFile})
 
-        # Set passwords for each enabled service user
-        ${lib.optionalString cfg.sonarr.enable ''
-          ${psql} -c "ALTER USER ${cfg.sonarr.user} WITH PASSWORD '$PASSWORD';"
-          ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.sonarr.mainDb} TO ${cfg.sonarr.user};"
-          ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.sonarr.logDb} TO ${cfg.sonarr.user};"
-        ''}
+          # Set passwords for each enabled service user
+          ${lib.optionalString cfg.sonarr.enable ''
+            ${psql} -c "ALTER USER ${cfg.sonarr.user} WITH PASSWORD '$PASSWORD';"
+            ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.sonarr.mainDb} TO ${cfg.sonarr.user};"
+            ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.sonarr.logDb} TO ${cfg.sonarr.user};"
+          ''}
 
-        ${lib.optionalString cfg.radarr.enable ''
-          ${psql} -c "ALTER USER ${cfg.radarr.user} WITH PASSWORD '$PASSWORD';"
-          ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.radarr.mainDb} TO ${cfg.radarr.user};"
-          ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.radarr.logDb} TO ${cfg.radarr.user};"
-        ''}
+          ${lib.optionalString cfg.radarr.enable ''
+            ${psql} -c "ALTER USER ${cfg.radarr.user} WITH PASSWORD '$PASSWORD';"
+            ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.radarr.mainDb} TO ${cfg.radarr.user};"
+            ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.radarr.logDb} TO ${cfg.radarr.user};"
+          ''}
 
-        ${lib.optionalString cfg.prowlarr.enable ''
-          ${psql} -c "ALTER USER ${cfg.prowlarr.user} WITH PASSWORD '$PASSWORD';"
-          ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.prowlarr.mainDb} TO ${cfg.prowlarr.user};"
-          ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.prowlarr.logDb} TO ${cfg.prowlarr.user};"
-        ''}
+          ${lib.optionalString cfg.prowlarr.enable ''
+            ${psql} -c "ALTER USER ${cfg.prowlarr.user} WITH PASSWORD '$PASSWORD';"
+            ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.prowlarr.mainDb} TO ${cfg.prowlarr.user};"
+            ${psql} -c "GRANT ALL PRIVILEGES ON DATABASE ${cfg.prowlarr.logDb} TO ${cfg.prowlarr.user};"
+          ''}
 
-        echo "PostgreSQL media database setup complete"
-      '';
+          echo "PostgreSQL media database setup complete"
+        '';
     };
 
     # Open firewall only if needed (default: localhost only, no firewall needed)

@@ -1,139 +1,139 @@
 name: CI
 
 on:
-    push:
-        branches:
-            - main
-            - master
-    pull_request:
-        branches:
-            - main
-            - master
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
 
 permissions:
-    contents: read
-    pull-requests: write
+  contents: read
+  pull-requests: write
+  id-token: write
 
 jobs:
-    check:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Install Nix
-              uses: DeterminateSystems/nix-installer-action@main
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
 
-            - name: Setup Nix cache
-              uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
 
-            - name: Check flake
-              run: nix flake check
+      - name: Check flake
+        run: nix flake check
 
-    build:
-        runs-on: ubuntu-latest
-        needs: check
-        strategy:
-            matrix:
-                host:
-                    - andromeda
+  build:
+    runs-on: ubuntu-latest
+    needs: check
+    strategy:
+      matrix:
+        host:
+          - andromeda
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Install Nix
-              uses: DeterminateSystems/nix-installer-action@main
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
 
-            - name: Setup Nix cache
-              uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
 
-            - name: Build ${{ matrix.host }} configuration
-              run: nix build .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel --dry-run
+      - name: Build ${{ matrix.host }} configuration
+        run: nix build .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel --dry-run
 
-    lint:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Install Nix
-              uses: DeterminateSystems/nix-installer-action@main
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
 
-            - name: Setup Nix cache
-              uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
 
-            - name: Run statix lint
-              run: |
-                  echo "## Lint Results" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
+      - name: Run statix lint
+        run: |
+          echo "## Lint Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-                  # Run statix linter on all Nix files
-                  if nix run nixpkgs#statix -- check . 2>&1 | tee /tmp/lint-output.txt; then
-                    echo "✅ No linting issues found!" >> $GITHUB_STEP_SUMMARY
-                  else
-                    echo "⚠️ Linting issues detected:" >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
-                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                    cat /tmp/lint-output.txt >> $GITHUB_STEP_SUMMARY
-                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                    exit 1
-                  fi
+          # Run statix linter on all Nix files
+          if nix run nixpkgs#statix -- check . 2>&1 | tee /tmp/lint-output.txt; then
+            echo "✅ No linting issues found!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Linting issues detected:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat /tmp/lint-output.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
 
-            - name: Run deadnix (find unused code)
-              run: |
-                  echo "## Dead Code Check" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
+      - name: Run deadnix (find unused code)
+        run: |
+          echo "## Dead Code Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-                  # Run deadnix to find unused bindings
-                  if nix run nixpkgs#deadnix -- -f . 2>&1 | tee /tmp/deadnix-output.txt; then
-                    echo "✅ No unused code found!" >> $GITHUB_STEP_SUMMARY
-                  else
-                    echo "⚠️ Unused code detected:" >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
-                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                    cat /tmp/deadnix-output.txt >> $GITHUB_STEP_SUMMARY
-                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                    # Don't fail on deadnix, just warn
-                  fi
+          # Run deadnix to find unused bindings
+          if nix run nixpkgs#deadnix -- -f . 2>&1 | tee /tmp/deadnix-output.txt; then
+            echo "✅ No unused code found!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Unused code detected:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat /tmp/deadnix-output.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            # Don't fail on deadnix, just warn
+          fi
 
-    format:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Install Nix
-              uses: DeterminateSystems/nix-installer-action@main
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
 
-            - name: Setup Nix cache
-              uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
 
-            - name: Check formatting
-              run: |
-                  nix develop -c nixpkgs-fmt --check .
+      - name: Check formatting
+        run: nix run nixpkgs#nixpkgs-fmt -- --check . --extra-experimental-features "nix-command flakes"
 
-    security:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Check for secrets
-              uses: trufflesecurity/trufflehog@main
-              with:
-                  extra_args: --only-verified
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
 
-    copilot-review:
-        runs-on: ubuntu-latest
-        if: github.event_name == 'pull_request'
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
+  copilot-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-            - name: GitHub Copilot Code Review
-              uses: github/copilot-code-review-action@v1
-              with:
-                  model: gpt-4o
+      - name: GitHub Copilot Code Review
+        uses: github/copilot-code-review-action@v1
+        with:
+          model: gpt-4o

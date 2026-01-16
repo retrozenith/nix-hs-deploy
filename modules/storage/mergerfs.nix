@@ -38,12 +38,12 @@
       create = lib.mkOption {
         type = lib.types.enum [
           "epmfs" # Existing path, most free space
-          "mfs"   # Most free space
-          "lfs"   # Least free space
+          "mfs" # Most free space
+          "lfs" # Least free space
           "eplus" # Existing path, least used space
-          "rand"  # Random
+          "rand" # Random
           "eplfs" # Existing path, least free space
-          "ff"    # First found
+          "ff" # First found
           "newest"
         ];
         default = "epmfs";
@@ -134,7 +134,7 @@
     # Install mergerfs
     environment.systemPackages = with pkgs; [
       mergerfs
-      mergerfs-tools  # Useful utilities for managing mergerfs pools
+      mergerfs-tools # Useful utilities for managing mergerfs pools
     ];
 
     # Create mount points for individual disks
@@ -144,17 +144,19 @@
         diskMountPoints = lib.mapAttrsToList (name: _: "d /mnt/${name} 0755 root root -") cfg.disks;
         poolMountPoint = [ "d ${cfg.poolPath} 0775 root root -" ];
       in
-        diskMountPoints ++ poolMountPoint;
+      diskMountPoints ++ poolMountPoint;
 
     # Mount individual disks
     fileSystems = lib.mkMerge [
       # Individual disk mounts
-      (lib.mapAttrs' (name: disk:
-        lib.nameValuePair "/mnt/${name}" {
-          inherit (disk) device fsType;
-          options = disk.mountOptions;
-        }
-      ) config.storage.mergerfs.disks)
+      (lib.mapAttrs'
+        (name: disk:
+          lib.nameValuePair "/mnt/${name}" {
+            inherit (disk) device fsType;
+            options = disk.mountOptions;
+          }
+        )
+        config.storage.mergerfs.disks)
 
       # MergerFS pool mount
       {
@@ -163,16 +165,17 @@
             let
               cfg = config.storage.mergerfs;
               diskBranches = lib.mapAttrsToList (name: _: "/mnt/${name}") cfg.disks;
-              allBranches = if cfg.branches != [] then cfg.branches else diskBranches;
+              allBranches = if cfg.branches != [ ] then cfg.branches else diskBranches;
             in
-              if cfg.branchPattern != null
-              then cfg.branchPattern
-              else lib.concatStringsSep ":" allBranches;
+            if cfg.branchPattern != null
+            then cfg.branchPattern
+            else lib.concatStringsSep ":" allBranches;
           fsType = "fuse.mergerfs";
           options =
             let
               cfg = config.storage.mergerfs;
-            in [
+            in
+            [
               "defaults"
               "allow_other"
               "use_ino"

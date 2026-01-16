@@ -177,58 +177,63 @@
           SKIP_STARTUP_FULL_SYNC = if config.services.streamystats.skipStartupFullSync then "true" else "false";
         };
 
-        environmentFiles = lib.mkIf (
-          config.services.streamystats.sessionSecretFile != null ||
-          config.services.streamystats.postgres.passwordFile != null
-        ) [
+        environmentFiles = lib.mkIf
+          (
+            config.services.streamystats.sessionSecretFile != null ||
+            config.services.streamystats.postgres.passwordFile != null
+          ) [
           "/run/streamystats/env"
         ];
       };
     };
 
     # Service to generate environment file from secrets
-    systemd.services.streamystats-env-generator = lib.mkIf (
-      config.services.streamystats.sessionSecretFile != null ||
-      config.services.streamystats.postgres.passwordFile != null
-    ) {
-      description = "Generate Streamystats environment from secrets";
-      before = [ "podman-streamystats.service" ];
-      requiredBy = [ "podman-streamystats.service" ];
-      wantedBy = [ "multi-user.target" ];
+    systemd.services.streamystats-env-generator = lib.mkIf
+      (
+        config.services.streamystats.sessionSecretFile != null ||
+        config.services.streamystats.postgres.passwordFile != null
+      )
+      {
+        description = "Generate Streamystats environment from secrets";
+        before = [ "podman-streamystats.service" ];
+        requiredBy = [ "podman-streamystats.service" ];
+        wantedBy = [ "multi-user.target" ];
 
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        User = "root";
-        Group = "root";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          User = "root";
+          Group = "root";
+        };
+
+        script =
+          let
+            cfg = config.services.streamystats;
+          in
+          ''
+            set -euo pipefail
+            mkdir -p /run/streamystats
+
+            ${lib.optionalString (cfg.postgres.passwordFile != null) ''
+            POSTGRES_PASSWORD=$(cat ${cfg.postgres.passwordFile})
+            ''}
+            ${lib.optionalString (cfg.sessionSecretFile != null) ''
+            SESSION_SECRET=$(cat ${cfg.sessionSecretFile})
+            ''}
+
+            cat > /run/streamystats/env << ENDOFFILE
+            ${lib.optionalString (cfg.postgres.passwordFile != null) ''
+            POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+            DATABASE_URL=postgresql://${cfg.postgres.user}:$POSTGRES_PASSWORD@127.0.0.1:5432/${cfg.postgres.database}
+            ''}
+            ${lib.optionalString (cfg.sessionSecretFile != null) ''
+            SESSION_SECRET=$SESSION_SECRET
+            ''}
+            ENDOFFILE
+
+            chmod 400 /run/streamystats/env
+          '';
       };
-
-      script = let
-        cfg = config.services.streamystats;
-      in ''
-        set -euo pipefail
-        mkdir -p /run/streamystats
-
-        ${lib.optionalString (cfg.postgres.passwordFile != null) ''
-        POSTGRES_PASSWORD=$(cat ${cfg.postgres.passwordFile})
-        ''}
-        ${lib.optionalString (cfg.sessionSecretFile != null) ''
-        SESSION_SECRET=$(cat ${cfg.sessionSecretFile})
-        ''}
-
-        cat > /run/streamystats/env << ENDOFFILE
-        ${lib.optionalString (cfg.postgres.passwordFile != null) ''
-        POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-        DATABASE_URL=postgresql://${cfg.postgres.user}:$POSTGRES_PASSWORD@127.0.0.1:5432/${cfg.postgres.database}
-        ''}
-        ${lib.optionalString (cfg.sessionSecretFile != null) ''
-        SESSION_SECRET=$SESSION_SECRET
-        ''}
-        ENDOFFILE
-
-        chmod 400 /run/streamystats/env
-      '';
-    };
 
     # Enable podman if not already enabled
     virtualisation.podman = {

@@ -216,7 +216,7 @@
   networking = {
     inherit hostName;
     networkmanager.enable = true;
-    useDHCP = false;  # Explicitly disable global DHCP since we use static IP
+    useDHCP = false; # Explicitly disable global DHCP since we use static IP
 
     interfaces.enp1s0 = {
       useDHCP = false;
@@ -276,6 +276,7 @@
     tree
     smartmontools
     hdparm
+    intel-gpu-tools
   ];
 
   # Admin user

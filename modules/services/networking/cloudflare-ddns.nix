@@ -128,160 +128,164 @@
         MemoryDenyWriteExecute = true;
         RestrictRealtime = true;
         PrivateDevices = true;
-        
+
         # Load credentials for access to root-owned secrets
         LoadCredential = [
           "api-token:${config.services.cloudflareDdns.apiTokenFile}"
           "zone-id:${config.services.cloudflareDdns.zoneIdFile}"
         ] ++ (
           # Generate credentials for domain secrets
-          lib.imap0 (i: domain: 
-            if domain.nameFile != null 
-            then "domain-${toString i}:${domain.nameFile}" 
-            else ""
-          ) (lib.filter (d: d.nameFile != null) config.services.cloudflareDdns.domains)
+          lib.imap0
+            (i: domain:
+              if domain.nameFile != null
+              then "domain-${toString i}:${domain.nameFile}"
+              else ""
+            )
+            (lib.filter (d: d.nameFile != null) config.services.cloudflareDdns.domains)
         );
       };
 
-      script = let
-        cfg = config.services.cloudflareDdns;
-        # Helper to get credential path if nameFile is used
-        getDomainCmd = i: domain:
-          if domain.nameFile != null 
-          then "cat \"$CREDENTIALS_DIRECTORY/domain-${toString i}\""
-          else "echo \"${domain.name}\"";
-      in ''
-        set -euo pipefail
+      script =
+        let
+          cfg = config.services.cloudflareDdns;
+          # Helper to get credential path if nameFile is used
+          getDomainCmd = i: domain:
+            if domain.nameFile != null
+            then "cat \"$CREDENTIALS_DIRECTORY/domain-${toString i}\""
+            else "echo \"${domain.name}\"";
+        in
+        ''
+          set -euo pipefail
 
-        STATE_DIR="/var/lib/cloudflare-ddns"
+          STATE_DIR="/var/lib/cloudflare-ddns"
 
-        # Read API token and Zone ID from credentials
-        API_TOKEN=$(cat "$CREDENTIALS_DIRECTORY/api-token")
-        ZONE_ID=$(cat "$CREDENTIALS_DIRECTORY/zone-id")
+          # Read API token and Zone ID from credentials
+          API_TOKEN=$(cat "$CREDENTIALS_DIRECTORY/api-token")
+          ZONE_ID=$(cat "$CREDENTIALS_DIRECTORY/zone-id")
 
-        # Function to get current public IP
-        get_public_ip() {
-          local ip_version=$1
-          local provider=$2
-          curl -s --max-time 10 "$provider" | tr -d '\n'
-        }
+          # Function to get current public IP
+          get_public_ip() {
+            local ip_version=$1
+            local provider=$2
+            curl -s --max-time 10 "$provider" | tr -d '\n'
+          }
 
-        # Function to get DNS record ID
-        get_record_id() {
-          local domain=$1
-          local record_type=$2
+          # Function to get DNS record ID
+          get_record_id() {
+            local domain=$1
+            local record_type=$2
 
-          curl -s --max-time 30 \
-            -H "Authorization: Bearer $API_TOKEN" \
-            -H "Content-Type: application/json" \
-            "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=$record_type&name=$domain" \
-            | jq -r '.result[0].id // empty'
-        }
-
-        # Function to get current DNS record IP
-        get_record_ip() {
-          local domain=$1
-          local record_type=$2
-
-          curl -s --max-time 30 \
-            -H "Authorization: Bearer $API_TOKEN" \
-            -H "Content-Type: application/json" \
-            "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=$record_type&name=$domain" \
-            | jq -r '.result[0].content // empty'
-        }
-
-        # Function to update DNS record
-        update_record() {
-          local domain=$1
-          local record_type=$2
-          local ip=$3
-          local proxied=$4
-          local ttl=$5
-          local record_id=$6
-
-          local proxied_json="false"
-          [ "$proxied" = "1" ] && proxied_json="true"
-
-          if [ -n "$record_id" ]; then
-            # Update existing record
-            echo "Updating $record_type record for $domain to $ip"
             curl -s --max-time 30 \
-              -X PUT \
               -H "Authorization: Bearer $API_TOKEN" \
               -H "Content-Type: application/json" \
-              --data "{\"type\":\"$record_type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":$ttl,\"proxied\":$proxied_json}" \
-              "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$record_id" \
-              | jq -r '.success'
-          else
-            # Create new record
-            echo "Creating $record_type record for $domain with IP $ip"
+              "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=$record_type&name=$domain" \
+              | jq -r '.result[0].id // empty'
+          }
+
+          # Function to get current DNS record IP
+          get_record_ip() {
+            local domain=$1
+            local record_type=$2
+
             curl -s --max-time 30 \
-              -X POST \
               -H "Authorization: Bearer $API_TOKEN" \
               -H "Content-Type: application/json" \
-              --data "{\"type\":\"$record_type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":$ttl,\"proxied\":$proxied_json}" \
-              "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
-              | jq -r '.success'
-          fi
-        }
+              "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=$record_type&name=$domain" \
+              | jq -r '.result[0].content // empty'
+          }
 
-        # Get current public IPs
-        ${lib.optionalString cfg.ipv4.enable ''
-          CURRENT_IPV4=$(get_public_ip 4 "${cfg.ipv4.provider}")
-          if [ -z "$CURRENT_IPV4" ]; then
-            echo "Failed to get public IPv4 address"
-          else
-            echo "Current IPv4: $CURRENT_IPV4"
-          fi
-        ''}
+          # Function to update DNS record
+          update_record() {
+            local domain=$1
+            local record_type=$2
+            local ip=$3
+            local proxied=$4
+            local ttl=$5
+            local record_id=$6
 
-        ${lib.optionalString cfg.ipv6.enable ''
-          CURRENT_IPV6=$(get_public_ip 6 "${cfg.ipv6.provider}")
-          if [ -z "$CURRENT_IPV6" ]; then
-            echo "Failed to get public IPv6 address"
-          else
-            echo "Current IPv6: $CURRENT_IPV6"
-          fi
-        ''}
+            local proxied_json="false"
+            [ "$proxied" = "1" ] && proxied_json="true"
 
-        # Process each domain
-        ${lib.concatMapStringsSep "\n" (item: let i = item.index; domain = item.data; in ''
-          # Get domain name
-          DOMAIN_NAME=$(${getDomainCmd i domain})
+            if [ -n "$record_id" ]; then
+              # Update existing record
+              echo "Updating $record_type record for $domain to $ip"
+              curl -s --max-time 30 \
+                -X PUT \
+                -H "Authorization: Bearer $API_TOKEN" \
+                -H "Content-Type: application/json" \
+                --data "{\"type\":\"$record_type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":$ttl,\"proxied\":$proxied_json}" \
+                "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$record_id" \
+                | jq -r '.success'
+            else
+              # Create new record
+              echo "Creating $record_type record for $domain with IP $ip"
+              curl -s --max-time 30 \
+                -X POST \
+                -H "Authorization: Bearer $API_TOKEN" \
+                -H "Content-Type: application/json" \
+                --data "{\"type\":\"$record_type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":$ttl,\"proxied\":$proxied_json}" \
+                "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
+                | jq -r '.success'
+            fi
+          }
 
-          echo "Processing domain: $DOMAIN_NAME"
-
-          ${lib.optionalString (cfg.ipv4.enable && domain.type == "A") ''
-            if [ -n "''${CURRENT_IPV4:-}" ]; then
-              RECORD_ID=$(get_record_id "$DOMAIN_NAME" "A")
-              RECORD_IP=$(get_record_ip "$DOMAIN_NAME" "A")
-
-              if [ "$RECORD_IP" != "$CURRENT_IPV4" ]; then
-                echo "IPv4 changed: $RECORD_IP -> $CURRENT_IPV4"
-                update_record "$DOMAIN_NAME" "A" "$CURRENT_IPV4" "${if domain.proxied then "1" else "0"}" "${toString domain.ttl}" "$RECORD_ID"
-              else
-                echo "IPv4 unchanged for $DOMAIN_NAME"
-              fi
+          # Get current public IPs
+          ${lib.optionalString cfg.ipv4.enable ''
+            CURRENT_IPV4=$(get_public_ip 4 "${cfg.ipv4.provider}")
+            if [ -z "$CURRENT_IPV4" ]; then
+              echo "Failed to get public IPv4 address"
+            else
+              echo "Current IPv4: $CURRENT_IPV4"
             fi
           ''}
 
-          ${lib.optionalString (cfg.ipv6.enable && domain.type == "AAAA") ''
-            if [ -n "''${CURRENT_IPV6:-}" ]; then
-              RECORD_ID=$(get_record_id "$DOMAIN_NAME" "AAAA")
-              RECORD_IP=$(get_record_ip "$DOMAIN_NAME" "AAAA")
-
-              if [ "$RECORD_IP" != "$CURRENT_IPV6" ]; then
-                echo "IPv6 changed: $RECORD_IP -> $CURRENT_IPV6"
-                update_record "$DOMAIN_NAME" "AAAA" "$CURRENT_IPV6" "${if domain.proxied then "1" else "0"}" "${toString domain.ttl}" "$RECORD_ID"
-              else
-                echo "IPv6 unchanged for $DOMAIN_NAME"
-              fi
+          ${lib.optionalString cfg.ipv6.enable ''
+            CURRENT_IPV6=$(get_public_ip 6 "${cfg.ipv6.provider}")
+            if [ -z "$CURRENT_IPV6" ]; then
+              echo "Failed to get public IPv6 address"
+            else
+              echo "Current IPv6: $CURRENT_IPV6"
             fi
           ''}
-        '') (lib.imap0 (i: d: { index = i; data = d; }) cfg.domains)}
 
-        echo "DDNS update completed at $(date)"
-      '';
+          # Process each domain
+          ${lib.concatMapStringsSep "\n" (item: let i = item.index; domain = item.data; in ''
+            # Get domain name
+            DOMAIN_NAME=$(${getDomainCmd i domain})
+
+            echo "Processing domain: $DOMAIN_NAME"
+
+            ${lib.optionalString (cfg.ipv4.enable && domain.type == "A") ''
+              if [ -n "''${CURRENT_IPV4:-}" ]; then
+                RECORD_ID=$(get_record_id "$DOMAIN_NAME" "A")
+                RECORD_IP=$(get_record_ip "$DOMAIN_NAME" "A")
+
+                if [ "$RECORD_IP" != "$CURRENT_IPV4" ]; then
+                  echo "IPv4 changed: $RECORD_IP -> $CURRENT_IPV4"
+                  update_record "$DOMAIN_NAME" "A" "$CURRENT_IPV4" "${if domain.proxied then "1" else "0"}" "${toString domain.ttl}" "$RECORD_ID"
+                else
+                  echo "IPv4 unchanged for $DOMAIN_NAME"
+                fi
+              fi
+            ''}
+
+            ${lib.optionalString (cfg.ipv6.enable && domain.type == "AAAA") ''
+              if [ -n "''${CURRENT_IPV6:-}" ]; then
+                RECORD_ID=$(get_record_id "$DOMAIN_NAME" "AAAA")
+                RECORD_IP=$(get_record_ip "$DOMAIN_NAME" "AAAA")
+
+                if [ "$RECORD_IP" != "$CURRENT_IPV6" ]; then
+                  echo "IPv6 changed: $RECORD_IP -> $CURRENT_IPV6"
+                  update_record "$DOMAIN_NAME" "AAAA" "$CURRENT_IPV6" "${if domain.proxied then "1" else "0"}" "${toString domain.ttl}" "$RECORD_ID"
+                else
+                  echo "IPv6 unchanged for $DOMAIN_NAME"
+                fi
+              fi
+            ''}
+          '') (lib.imap0 (i: d: { index = i; data = d; }) cfg.domains)}
+
+          echo "DDNS update completed at $(date)"
+        '';
     };
 
     # Timer for periodic updates
@@ -291,11 +295,11 @@
 
       timerConfig = {
         ${if config.services.cloudflareDdns.onCalendar != null
-          then "OnCalendar"
-          else "OnUnitActiveSec"} =
-            if config.services.cloudflareDdns.onCalendar != null
-            then config.services.cloudflareDdns.onCalendar
-            else config.services.cloudflareDdns.interval;
+        then "OnCalendar"
+        else "OnUnitActiveSec"} =
+          if config.services.cloudflareDdns.onCalendar != null
+          then config.services.cloudflareDdns.onCalendar
+          else config.services.cloudflareDdns.interval;
         OnBootSec = "1m";
         RandomizedDelaySec = "30s";
         Persistent = true;

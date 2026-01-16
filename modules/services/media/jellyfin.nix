@@ -105,10 +105,10 @@
     hardware.graphics = lib.mkIf config.services.jellyfinServer.hardwareAcceleration.enable {
       enable = true;
       extraPackages = with pkgs; [
-        intel-media-driver  # VAAPI for Intel
-        vaapiIntel          # Older Intel VAAPI
-        vaapiVdpau          # VDPAU backend for VAAPI
-        libvdpau-va-gl      # OpenGL backend for VDPAU
+        intel-media-driver # VAAPI for Intel
+        vaapiIntel # Older Intel VAAPI
+        vaapiVdpau # VDPAU backend for VAAPI
+        libvdpau-va-gl # OpenGL backend for VDPAU
       ] ++ lib.optionals (config.services.jellyfinServer.hardwareAcceleration.type == "qsv") [
         intel-compute-runtime
       ];
@@ -118,7 +118,8 @@
     systemd.tmpfiles.rules =
       let
         inherit (config.services.jellyfinServer) user group;
-      in [
+      in
+      [
         "d ${config.services.jellyfinServer.dataDir} 0750 ${user} ${group} -"
         "d ${config.services.jellyfinServer.cacheDir} 0750 ${user} ${group} -"
       ];
@@ -130,8 +131,8 @@
         config.services.jellyfinServer.httpsPort
       ];
       allowedUDPPorts = lib.optionals config.services.jellyfinServer.dlna.enable [
-        1900  # DLNA discovery
-        7359  # Jellyfin client discovery
+        1900 # DLNA discovery
+        7359 # Jellyfin client discovery
       ];
     };
   };

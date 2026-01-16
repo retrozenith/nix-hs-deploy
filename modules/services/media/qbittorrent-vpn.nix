@@ -75,11 +75,11 @@
     users.users.qbittorrent = {
       isSystemUser = true;
       group = "qbittorrent";
-      uid = 850;  # Fixed UID for container compatibility
+      uid = 850; # Fixed UID for container compatibility
     };
 
     users.groups.qbittorrent = {
-      gid = 850;  # Fixed GID for container compatibility
+      gid = 850; # Fixed GID for container compatibility
     };
 
     # Create data directories with proper permissions
@@ -153,8 +153,8 @@
         ];
 
         environment = {
-          PUID = "850";  # qbittorrent user UID
-          PGID = "850";  # qbittorrent group GID
+          PUID = "850"; # qbittorrent user UID
+          PGID = "850"; # qbittorrent group GID
           TZ = config.time.timeZone;
           WEBUI_PORT = "8080";
           TORRENTING_PORT = toString config.services.qbittorrentVpn.peerPort;

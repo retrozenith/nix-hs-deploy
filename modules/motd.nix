@@ -190,7 +190,7 @@ in
 
     externalDomains = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
-      default = {};
+      default = { };
       example = {
         Jellyfin = "jf.example.com";
         Vaultwarden = "vault.example.com";

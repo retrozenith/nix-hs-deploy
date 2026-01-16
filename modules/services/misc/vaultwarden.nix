@@ -142,8 +142,8 @@
         # Security settings
         PASSWORD_ITERATIONS = 600000;
         DISABLE_ICON_DOWNLOAD = false;
-        ICON_CACHE_TTL = 2592000;  # 30 days
-        ICON_CACHE_NEGTTL = 259200;  # 3 days
+        ICON_CACHE_TTL = 2592000; # 30 days
+        ICON_CACHE_NEGTTL = 259200; # 3 days
 
         # Logging
         LOG_LEVEL = "info";
@@ -161,67 +161,71 @@
       # Use generated env file if secrets are configured, otherwise use user-provided environmentFile
       environmentFile =
         if (config.services.vaultwardenConfig.domainFile != null ||
-            config.services.vaultwardenConfig.adminTokenFile != null ||
-            (config.services.vaultwardenConfig.smtp.enable && config.services.vaultwardenConfig.smtp.usernameFile != null))
+          config.services.vaultwardenConfig.adminTokenFile != null ||
+          (config.services.vaultwardenConfig.smtp.enable && config.services.vaultwardenConfig.smtp.usernameFile != null))
         then "/run/vaultwarden/env"
         else config.services.vaultwardenConfig.environmentFile;
     };
 
     systemd = {
       # Generate environment file from secrets if needed
-      services.vaultwarden-env-generator = lib.mkIf (
-        config.services.vaultwardenConfig.domainFile != null ||
-        config.services.vaultwardenConfig.adminTokenFile != null ||
-        (config.services.vaultwardenConfig.smtp.enable && config.services.vaultwardenConfig.smtp.usernameFile != null)
-      ) {
-        description = "Generate Vaultwarden environment from secrets";
-        before = [ "vaultwarden.service" ];
-        requiredBy = [ "vaultwarden.service" ];
-        wantedBy = [ "multi-user.target" ];
+      services.vaultwarden-env-generator = lib.mkIf
+        (
+          config.services.vaultwardenConfig.domainFile != null ||
+          config.services.vaultwardenConfig.adminTokenFile != null ||
+          (config.services.vaultwardenConfig.smtp.enable && config.services.vaultwardenConfig.smtp.usernameFile != null)
+        )
+        {
+          description = "Generate Vaultwarden environment from secrets";
+          before = [ "vaultwarden.service" ];
+          requiredBy = [ "vaultwarden.service" ];
+          wantedBy = [ "multi-user.target" ];
 
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          User = "root";
-          Group = "root";
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            User = "root";
+            Group = "root";
+          };
+
+          script =
+            let
+              cfg = config.services.vaultwardenConfig;
+            in
+            ''
+              set -euo pipefail
+
+              ENV_FILE="/run/vaultwarden/env"
+              mkdir -p /run/vaultwarden
+              chmod 750 /run/vaultwarden
+
+              # Start with empty file
+              echo "# Auto-generated Vaultwarden environment" > "$ENV_FILE"
+
+              ${lib.optionalString (cfg.domainFile != null) ''
+                DOMAIN=$(cat ${cfg.domainFile})
+                echo "DOMAIN=https://$DOMAIN" >> "$ENV_FILE"
+              ''}
+
+              ${lib.optionalString (cfg.adminTokenFile != null) ''
+                ADMIN_TOKEN=$(cat ${cfg.adminTokenFile})
+                echo "ADMIN_TOKEN=$ADMIN_TOKEN" >> "$ENV_FILE"
+              ''}
+
+              ${lib.optionalString (cfg.smtp.enable && cfg.smtp.usernameFile != null) ''
+                SMTP_USERNAME=$(cat ${cfg.smtp.usernameFile})
+                echo "SMTP_USERNAME=$SMTP_USERNAME" >> "$ENV_FILE"
+              ''}
+
+              ${lib.optionalString (cfg.smtp.enable && cfg.smtp.passwordFile != null) ''
+                SMTP_PASSWORD=$(cat ${cfg.smtp.passwordFile})
+                echo "SMTP_PASSWORD=$SMTP_PASSWORD" >> "$ENV_FILE"
+              ''}
+
+              chmod 400 "$ENV_FILE"
+              chown vaultwarden:vaultwarden "$ENV_FILE"
+            '';
         };
-
-        script = let
-          cfg = config.services.vaultwardenConfig;
-        in ''
-          set -euo pipefail
-
-          ENV_FILE="/run/vaultwarden/env"
-          mkdir -p /run/vaultwarden
-          chmod 750 /run/vaultwarden
-
-          # Start with empty file
-          echo "# Auto-generated Vaultwarden environment" > "$ENV_FILE"
-
-          ${lib.optionalString (cfg.domainFile != null) ''
-            DOMAIN=$(cat ${cfg.domainFile})
-            echo "DOMAIN=https://$DOMAIN" >> "$ENV_FILE"
-          ''}
-
-          ${lib.optionalString (cfg.adminTokenFile != null) ''
-            ADMIN_TOKEN=$(cat ${cfg.adminTokenFile})
-            echo "ADMIN_TOKEN=$ADMIN_TOKEN" >> "$ENV_FILE"
-          ''}
-
-          ${lib.optionalString (cfg.smtp.enable && cfg.smtp.usernameFile != null) ''
-            SMTP_USERNAME=$(cat ${cfg.smtp.usernameFile})
-            echo "SMTP_USERNAME=$SMTP_USERNAME" >> "$ENV_FILE"
-          ''}
-
-          ${lib.optionalString (cfg.smtp.enable && cfg.smtp.passwordFile != null) ''
-            SMTP_PASSWORD=$(cat ${cfg.smtp.passwordFile})
-            echo "SMTP_PASSWORD=$SMTP_PASSWORD" >> "$ENV_FILE"
-          ''}
-
-          chmod 400 "$ENV_FILE"
-          chown vaultwarden:vaultwarden "$ENV_FILE"
-        '';
-      };
 
       # Create data directory
       tmpfiles.rules = [
