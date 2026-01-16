@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "nixos": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "ghcr.io/utensils/mcp-nixos:latest"]
+    }
+  }
+}
