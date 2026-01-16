@@ -218,7 +218,7 @@
     networkmanager.enable = true;
     useDHCP = false;  # Explicitly disable global DHCP since we use static IP
 
-    interfaces.eth0 = {
+    interfaces.enp1s0 = {
       useDHCP = false;
       ipv4.addresses = [{
         address = "192.168.0.26";
@@ -243,6 +243,17 @@
 
   # Locale
   i18n.defaultLocale = "en_US.UTF-8";
+  i18n.extraLocaleSettings = {
+    LC_ADDRESS = "ro_RO.UTF-8";
+    LC_IDENTIFICATION = "ro_RO.UTF-8";
+    LC_MEASUREMENT = "ro_RO.UTF-8";
+    LC_MONETARY = "ro_RO.UTF-8";
+    LC_NAME = "ro_RO.UTF-8";
+    LC_NUMERIC = "ro_RO.UTF-8";
+    LC_PAPER = "ro_RO.UTF-8";
+    LC_TELEPHONE = "ro_RO.UTF-8";
+    LC_TIME = "ro_RO.UTF-8";
+  };
 
   # System packages
   environment.systemPackages = with pkgs; [
@@ -259,9 +270,9 @@
   ];
 
   # Admin user
-  users.users.admin = {
+  users.users.cvictor = {
     isNormalUser = true;
-    description = "Server Admin";
+    description = "Cristea Florian Victor";
     extraGroups = [ "wheel" "networkmanager" "media" ];
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILpgI8QYYV6UspNyqa1PfDd0LafyR8ebKqky56z6YJd3 andromeda-deploy"
@@ -291,5 +302,5 @@
     };
   };
 
-  system.stateVersion = "24.05";
+  system.stateVersion = "25.11";
 }

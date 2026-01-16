@@ -27,15 +27,14 @@ let
   # IMPORTANT: Add the host key here once the server is up, then run:
   #   agenix -r  (to re-encrypt all secrets with the new key)
   #
-  # andromeda = "ssh-ed25519 AAAA... root@andromeda";
+  andromeda = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIx8lAiaztjNncUqSD2lVt40CHII2HY/eQbhORdr2e/w root@nixos";
 
   # Key groups
   users = [ admin ];
-  # hosts = [ andromeda ];  # Uncomment when host key is available
+  hosts = [ andromeda ];
 
-  # For now, encrypt with admin key only. Host will need the admin private key
-  # or you'll need to re-encrypt with the host key once the server is up.
-  allKeys = users;  # Change to: users ++ hosts; when host key is added
+  # Encrypt with both admin and host keys
+  allKeys = users ++ hosts;
 
 in
 {

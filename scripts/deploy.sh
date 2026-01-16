@@ -30,7 +30,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Default values
 SERVER_IP="${SERVER_IP:-192.168.0.26}"
-SERVER_USER="${SERVER_USER:-admin}"
+SERVER_USER="${SERVER_USER:-cvictor}"
 USE_TAILSCALE=false
 TAILSCALE_HOSTNAME="andromeda"
 BUILD_ONLY=false
