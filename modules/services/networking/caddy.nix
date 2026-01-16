@@ -363,8 +363,14 @@
       # Override Caddy service to use generated config
       services.caddy = {
         serviceConfig = {
-          ExecStart = lib.mkForce "${pkgs.caddy}/bin/caddy run --config /etc/caddy/Caddyfile.generated --adapter caddyfile";
-          ExecReload = lib.mkForce "${pkgs.caddy}/bin/caddy reload --config /etc/caddy/Caddyfile.generated --adapter caddyfile";
+          ExecStart = [
+            "" 
+            "${pkgs.caddy}/bin/caddy run --config /etc/caddy/Caddyfile.generated --adapter caddyfile"
+          ];
+          ExecReload = [
+            ""
+            "${pkgs.caddy}/bin/caddy reload --config /etc/caddy/Caddyfile.generated --adapter caddyfile"
+          ];
         };
       };
 
