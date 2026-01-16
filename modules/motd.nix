@@ -120,17 +120,17 @@ let
     printf "   $(service_status radarr) %-12s\n" "Radarr"
     printf "   $(service_status prowlarr) %-12s" "Prowlarr"
     printf "   $(service_status jellyseerr) %-12s" "Jellyseerr"
-    printf "   $(container_status qbittorrent) %-12s\n" "qBittorrent"
+    printf "   $(service_status podman-qbittorrent) %-12s\n" "qBittorrent"
 
     # Other services
     printf "   $(service_status caddy) %-12s" "Caddy"
     printf "   $(service_status vaultwarden) %-12s" "Vaultwarden"
-    printf "   $(service_status streamystats) %-12s\n" "Streamystats"
+    printf "   $(service_status podman-streamystats) %-12s\n" "Streamystats"
 
     # VPN status
-    if podman ps --format "{{.Names}}" 2>/dev/null | grep -q "^gluetun$"; then
-      VPN_IP=$(podman exec gluetun wget -qO- ifconfig.me 2>/dev/null || echo "checking...")
-      echo -e "   $(container_status gluetun) Gluetun VPN   ''${DIM}(Public IP: $VPN_IP)''${NC}"
+    if systemctl is-active --quiet "podman-gluetun" 2>/dev/null; then
+      # VPN_IP=$(podman exec gluetun wget -qO- ifconfig.me 2>/dev/null || echo "checking...")
+      echo -e "   $(service_status podman-gluetun) Gluetun VPN   ''${DIM}(Active)''${NC}"
     fi
     echo ""
     ''}
