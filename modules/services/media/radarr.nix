@@ -87,8 +87,10 @@ in
       home = cfg.dataDir;
     };
 
-    # Ensure media group exists
-    users.groups.${cfg.group} = { };
+    # Ensure media group exists with fixed GID
+    users.groups.${cfg.group} = {
+      gid = 993;
+    };
 
     # Create directories with proper permissions
     # PostgreSQL environment variables for Radarr

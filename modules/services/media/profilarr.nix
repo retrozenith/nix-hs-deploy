@@ -47,7 +47,7 @@ in
     # Create profilarr user and group
     users.users.${cfg.user} = {
       isSystemUser = true;
-      group = cfg.user;
+      group = "media";
       uid = cfg.uid;
     };
 
@@ -57,7 +57,7 @@ in
 
     # Create config directory
     systemd.tmpfiles.rules = [
-      "d ${cfg.configDir} 0750 ${cfg.user} ${cfg.user} -"
+      "d ${cfg.configDir} 0750 ${cfg.user} media -"
     ];
 
     # Enable podman
@@ -84,7 +84,7 @@ in
         environment = {
           TZ = config.time.timeZone;
           PUID = toString cfg.uid;
-          PGID = toString cfg.uid;
+          PGID = "993"; # media group GID
         };
         
         extraOptions = [

@@ -17,7 +17,7 @@
 
     group = lib.mkOption {
       type = lib.types.str;
-      default = "jellyfin";
+      default = "media";
       description = "Group to run Jellyfin as";
     };
 
@@ -98,7 +98,11 @@
       ];
     };
 
-    users.groups.${config.services.jellyfinServer.group} = lib.mkIf (config.services.jellyfinServer.group == "jellyfin") { };
+    users.groups.${config.services.jellyfinServer.group} = lib.mkIf (config.services.jellyfinServer.group == "media") {
+      gid = 993;
+    };
+
+    users.groups.jellyfin = lib.mkIf (config.services.jellyfinServer.group != "jellyfin") { };
 
     # Hardware acceleration support
     # Note: hardware.opengl is deprecated in NixOS 24.05+, using hardware.graphics instead

@@ -56,8 +56,10 @@
   };
 
   config = lib.mkIf config.services.mediaServices.enable {
-    # Ensure media group exists
-    users.groups.${config.services.mediaServices.mediaGroup} = { };
+    # Ensure media group exists with a fixed GID for container compatibility
+    users.groups.${config.services.mediaServices.mediaGroup} = {
+      gid = 993;
+    };
 
     # Create base directories
     systemd.tmpfiles.rules = [

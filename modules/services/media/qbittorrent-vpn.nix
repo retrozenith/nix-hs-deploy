@@ -89,6 +89,8 @@
       "d ${config.services.qbittorrentVpn.dataDir} 0750 root root -"
       "d ${config.services.qbittorrentVpn.configDir} 0750 qbittorrent qbittorrent -"
       "d ${config.services.qbittorrentVpn.downloadDir} 0775 qbittorrent media -"
+      "d ${config.services.qbittorrentVpn.downloadDir}/complete 0775 qbittorrent media -"
+      "d ${config.services.qbittorrentVpn.downloadDir}/incomplete 0775 qbittorrent media -"
     ];
 
     # Enable podman for containers
@@ -157,7 +159,7 @@
 
         environment = {
           PUID = "850"; # qbittorrent user UID
-          PGID = "850"; # qbittorrent group GID
+          PGID = "993"; # media group GID for shared access
           TZ = config.time.timeZone;
           WEBUI_PORT = "8080";
           TORRENTING_PORT = toString config.services.qbittorrentVpn.peerPort;

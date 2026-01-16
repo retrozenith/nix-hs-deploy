@@ -29,6 +29,12 @@ in
       description = "Port for Prowlarr web interface";
     };
 
+    group = lib.mkOption {
+      type = lib.types.str;
+      default = "media";
+      description = "Group to run Prowlarr as";
+    };
+
     dataDir = lib.mkOption {
       type = lib.types.path;
       default = "/var/lib/prowlarr";
@@ -57,11 +63,16 @@ in
       inherit (cfg) openFirewall;
     };
 
+    # Create group with fixed GID
+    users.groups.${cfg.group} = {
+      gid = 993;
+    };
+
     # Systemd configuration
     systemd = {
       # Create data directory
       tmpfiles.rules = [
-        "d ${cfg.dataDir} 0750 prowlarr prowlarr -"
+        "d ${cfg.dataDir} 0750 prowlarr media -"
       ];
 
       services.prowlarr = {
@@ -85,6 +96,7 @@ in
             ''}"
           ];
           EnvironmentFile = lib.mkIf (pgCfg.passwordFile != null) "/run/prowlarr/postgres.env";
+          Group = cfg.group;
         };
 
         # Ensure PostgreSQL is ready before Prowlarr starts
