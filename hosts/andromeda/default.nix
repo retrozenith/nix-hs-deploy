@@ -238,6 +238,15 @@
     };
   };
 
+  # Allow cvictor to run sudo without a password for headless deployments
+  security.sudo.extraRules = [{
+    users = [ "cvictor" ];
+    commands = [{
+      command = "ALL";
+      options = [ "NOPASSWD" ];
+    }];
+  }];
+
   # Time zone
   time.timeZone = "Europe/Bucharest";
 
