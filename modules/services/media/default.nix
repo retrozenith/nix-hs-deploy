@@ -18,6 +18,7 @@
     ./postgres.nix
     ./flaresolverr.nix
     ./profilarr.nix
+    ./homepage.nix
   ];
 
   # Common media group for shared file access

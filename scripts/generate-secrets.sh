@@ -177,6 +177,7 @@ generate_secrets() {
         ["domain-request"]="${DOMAIN_REQUEST:-}"
         ["domain-auth"]="${DOMAIN_AUTH:-}"
         ["domain-streamystats"]="${DOMAIN_STREAMYSTATS:-}"
+        ["domain-homepage"]="${DOMAIN_HOMEPAGE:-}"
         ["vaultwarden-admin-token"]="${VAULTWARDEN_ADMIN_TOKEN:-}"
         ["gluetun-wireguard-key"]="${GLUETUN_WIREGUARD_KEY:-}"
         ["streamystats-session-secret"]="${STREAMYSTATS_SESSION_SECRET:-}"
@@ -295,6 +296,7 @@ generate_secrets_with_age() {
     try_create "domain-request" "${DOMAIN_REQUEST:-}"
     try_create "domain-auth" "${DOMAIN_AUTH:-}"
     try_create "domain-streamystats" "${DOMAIN_STREAMYSTATS:-}"
+    try_create "domain-homepage" "${DOMAIN_HOMEPAGE:-}"
 
     # Vaultwarden
     try_create "vaultwarden-admin-token" "${VAULTWARDEN_ADMIN_TOKEN:-}"
@@ -308,6 +310,19 @@ generate_secrets_with_age() {
 
     # Media PostgreSQL (Sonarr, Radarr, Prowlarr)
     try_create "media-postgres-password" "${MEDIA_POSTGRES_PASSWORD:-}"
+
+    # Homepage Dashboard - combine API keys into env file
+    if [[ -n "${HOMEPAGE_VAR_SONARR_KEY:-}" || -n "${HOMEPAGE_VAR_RADARR_KEY:-}" || -n "${HOMEPAGE_VAR_PROWLARR_KEY:-}" || -n "${HOMEPAGE_VAR_JELLYFIN_KEY:-}" || -n "${HOMEPAGE_VAR_JELLYSEER_KEY:-}" || -n "${HOMEPAGE_VAR_QBITTORRENT_USERNAME:-}" ]]; then
+        HOMEPAGE_ENV=""
+        [[ -n "${HOMEPAGE_VAR_SONARR_KEY:-}" ]] && HOMEPAGE_ENV+="HOMEPAGE_VAR_SONARR_KEY=${HOMEPAGE_VAR_SONARR_KEY}\n"
+        [[ -n "${HOMEPAGE_VAR_RADARR_KEY:-}" ]] && HOMEPAGE_ENV+="HOMEPAGE_VAR_RADARR_KEY=${HOMEPAGE_VAR_RADARR_KEY}\n"
+        [[ -n "${HOMEPAGE_VAR_PROWLARR_KEY:-}" ]] && HOMEPAGE_ENV+="HOMEPAGE_VAR_PROWLARR_KEY=${HOMEPAGE_VAR_PROWLARR_KEY}\n"
+        [[ -n "${HOMEPAGE_VAR_JELLYFIN_KEY:-}" ]] && HOMEPAGE_ENV+="HOMEPAGE_VAR_JELLYFIN_KEY=${HOMEPAGE_VAR_JELLYFIN_KEY}\n"
+        [[ -n "${HOMEPAGE_VAR_JELLYSEER_KEY:-}" ]] && HOMEPAGE_ENV+="HOMEPAGE_VAR_JELLYSEER_KEY=\"${HOMEPAGE_VAR_JELLYSEER_KEY}\"\n"
+        [[ -n "${HOMEPAGE_VAR_QBITTORRENT_USERNAME:-}" ]] && HOMEPAGE_ENV+="HOMEPAGE_VAR_QBITTORRENT_USERNAME=${HOMEPAGE_VAR_QBITTORRENT_USERNAME}\n"
+        [[ -n "${HOMEPAGE_VAR_QBITTORRENT_PASSWORD:-}" ]] && HOMEPAGE_ENV+="HOMEPAGE_VAR_QBITTORRENT_PASSWORD=${HOMEPAGE_VAR_QBITTORRENT_PASSWORD}\n"
+        try_create "homepage-env" "$(echo -e "$HOMEPAGE_ENV")"
+    fi
 
     # Cleanup
     rm -f "$RECIPIENTS_FILE"

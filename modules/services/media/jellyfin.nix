@@ -3,11 +3,32 @@
 #
 # Provides streaming for movies, TV shows, music, and more
 
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, inputs, ... }:
 
+let
+  # Import unstable pkgs for Jellyfin to get latest version
+  unstablePkgs = import inputs.nixpkgs-unstable {
+    system = pkgs.system;
+    config.allowUnfree = true;
+  };
+in
 {
   options.services.jellyfinServer = {
     enable = lib.mkEnableOption "Jellyfin media server";
+
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = unstablePkgs.jellyfin;
+      defaultText = lib.literalExpression "pkgs.jellyfin";
+      description = "Jellyfin package to use (defaults to nixpkgs-unstable)";
+    };
+
+    ffmpegPackage = lib.mkOption {
+      type = lib.types.package;
+      default = unstablePkgs.jellyfin-ffmpeg;
+      defaultText = lib.literalExpression "pkgs.jellyfin-ffmpeg";
+      description = "FFmpeg package for Jellyfin (defaults to nixpkgs-unstable)";
+    };
 
     user = lib.mkOption {
       type = lib.types.str;
@@ -85,8 +106,16 @@
     # Use the built-in NixOS Jellyfin service
     services.jellyfin = {
       enable = true;
+      package = config.services.jellyfinServer.package;
       inherit (config.services.jellyfinServer) user group dataDir cacheDir openFirewall;
     };
+
+    # Override jellyfin-ffmpeg to use unstable as well
+    nixpkgs.overlays = [
+      (final: prev: {
+        jellyfin-ffmpeg = config.services.jellyfinServer.ffmpegPackage;
+      })
+    ];
 
     # Create user and group if using defaults
     users.users.${config.services.jellyfinServer.user} = lib.mkIf (config.services.jellyfinServer.user == "jellyfin") {

@@ -136,6 +136,23 @@
       group = "root";
       mode = "0400";
     };
+
+    # ===========================================
+    # Homepage Dashboard
+    # ===========================================
+    domain-homepage = {
+      file = ./domain-homepage.age;
+      owner = "root";
+      group = "root";
+      mode = "0400";
+    };
+
+    homepage-env = {
+      file = ./homepage-env.age;
+      owner = "root";
+      group = "root";
+      mode = "0444";
+    };
   };
 
   # SSH key used by the host to decrypt secrets

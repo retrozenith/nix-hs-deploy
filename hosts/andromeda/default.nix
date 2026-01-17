@@ -132,7 +132,29 @@
         port = 3000;
       };
 
+      homepage = {
+        enable = true;
+        domainFile = config.age.secrets.domain-homepage.path;
+        port = 8082;
+      };
+
       tailscaleOnly = false;
+    };
+
+    # Homepage Dashboard
+    # Note: Domains must be configured directly here since Nix can't read secrets at eval time
+    # Update these URLs to match your actual domains from .env.secrets
+    homepageDashboard = {
+      enable = true;
+      envFile = config.age.secrets.homepage-env.path;
+      domains = {
+        # These should match your DOMAIN_* values in .env.secrets
+        jellyfin = "https://jf.cristeavictor.xyz";
+        jellyseerr = "https://request.cristeavictor.xyz";
+        prowlarr = "https://prowlarr.cristeavictor.xyz";
+        vaultwarden = "https://vault.cristeavictor.xyz";
+        streamystats = "https://streamystats.cristeavictor.xyz";
+      };
     };
 
     # Vaultwarden - Self-hosted password manager
@@ -192,6 +214,12 @@
           type = "A";
           ttl = 1;
         }
+        {
+          nameFile = config.age.secrets.domain-homepage.path;
+          proxied = true;
+          type = "A";
+          ttl = 1;
+        }
       ];
     };
 
@@ -215,7 +243,7 @@
   # Networking
   networking = {
     inherit hostName;
-    networkmanager.enable = true;
+    networkmanager.enable = false;
     useDHCP = false; # Explicitly disable global DHCP since we use static IP
 
     interfaces.enp1s0 = {
@@ -283,7 +311,7 @@
   users.users.cvictor = {
     isNormalUser = true;
     description = "Cristea Florian Victor";
-    extraGroups = [ "wheel" "networkmanager" "media" ];
+    extraGroups = [ "wheel" "media" ];
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILpgI8QYYV6UspNyqa1PfDd0LafyR8ebKqky56z6YJd3 andromeda-deploy"
     ];

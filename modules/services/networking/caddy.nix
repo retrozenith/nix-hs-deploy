@@ -127,6 +127,26 @@
       };
     };
 
+    homepage = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Enable Homepage Dashboard reverse proxy";
+      };
+
+      domainFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Path to file containing full Homepage domain (e.g., dash.example.com)";
+      };
+
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 8082;
+        description = "Homepage backend port";
+      };
+    };
+
     tailscaleOnly = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -209,6 +229,10 @@
 
             ${lib.optionalString (cfg.streamystats.enable && cfg.streamystats.domainFile != null) ''
               STREAMYSTATS_HOST=$(cat ${cfg.streamystats.domainFile})
+            ''}
+
+            ${lib.optionalString (cfg.homepage.enable && cfg.homepage.domainFile != null) ''
+              HOMEPAGE_HOST=$(cat ${cfg.homepage.domainFile})
             ''}
 
             # Generate Caddyfile
@@ -346,6 +370,26 @@
 
                 log {
                     output file /var/log/caddy/streamystats.log {
+                        roll_size 10mb
+                        roll_keep 5
+                    }
+                }
+            }
+            ''}
+
+            ${lib.optionalString (cfg.homepage.enable && cfg.homepage.domainFile != null) ''
+            # Homepage Dashboard
+            $HOMEPAGE_HOST {
+                import security_headers
+
+                reverse_proxy localhost:${toString cfg.homepage.port} {
+                    header_up X-Real-IP {remote_host}
+                    header_up X-Forwarded-For {remote_host}
+                    header_up X-Forwarded-Proto {scheme}
+                }
+
+                log {
+                    output file /var/log/caddy/homepage.log {
                         roll_size 10mb
                         roll_keep 5
                     }
